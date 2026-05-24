@@ -332,6 +332,7 @@
   총 이미지→텍스트 간격: 8(margin)+24(height)+20(next component margin) = 52px
 */
 .preview-carousel .preview-slider-bar {
+  width: auto;         /* ★ .preview-slider-bar의 width:calc(100%+40px)를 명시적으로 재정의 */
   margin: 8px 20px 0;  /* top:8px, 좌우 20px → 이미지 full-bleed 내에서 콘텐츠 폭으로 축소 */
   height: 24px;        /* 실제: height:24px */
   background: transparent;
