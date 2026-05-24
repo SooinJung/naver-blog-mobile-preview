@@ -462,7 +462,9 @@ function buildImageBlock(imgs, isStandalone = false) {
     const ratioStyle = (w && h) ? ` style="aspect-ratio:${w}/${h}"` : '';
     // se-image 단독 → max-width(여백 있음), se-imageGroup 1장 → full-bleed
     const cls = isStandalone ? 'preview-single-img preview-single-img--contained' : 'preview-single-img';
-    return `<img src="${src}" class="${cls}"${ratioStyle}>`;
+    // loading="eager": 네이버 페이지가 img에 lazy를 주입하거나 Chrome이 transform 밖 이미지를
+    // viewport 외부로 판단해 로드를 지연하는 것을 방지
+    return `<img src="${src}" class="${cls}"${ratioStyle} loading="eager">`;
   }
 
   // 2장+: 실제 네이버 앱 방식
@@ -480,7 +482,7 @@ function buildImageBlock(imgs, isStandalone = false) {
       <div class="preview-carousel-track">
         ${imgs.map((img, i) =>
           `<div class="preview-carousel-item" style="width:${itemWidths[i]}px">` +
-          `<img src="${img.src}" class="preview-carousel-img"></div>`
+          `<img src="${img.src}" class="preview-carousel-img" loading="eager"></div>`
         ).join('')}
       </div>
       <button class="preview-carousel-btn preview-carousel-prev">&#8249;</button>
@@ -505,7 +507,7 @@ function getBodyHTML() {
       // ① 스티커: 풀사이즈 이미지로 렌더링되지 않도록 별도 처리
       if (comp.classList.contains('se-sticker')) {
         const img = comp.querySelector('img.se-sticker-image, img');
-        if (img) html += `<img src="${img.src}" class="preview-sticker" alt="">`;
+        if (img) html += `<img src="${img.src}" class="preview-sticker" loading="eager" alt="">`;
         return;
       }
 
@@ -633,7 +635,12 @@ function initCarousels() {
 
     // 초기 상태: 전체 그룹을 viewport 가운데에 배치
     // (세로 이미지 2장인 경우 양쪽이 균등하게 잘려 보임)
-    const initGroupOffset = Math.floor((totalWidth - viewportWidth) / 2);
+    //
+    // 단, offset이 너무 크면 이미지1이 화면 밖으로 완전히 나가서 lazy load 지연 발생
+    // → 이미지1 너비의 절반 이하로 clamp (이미지1 항상 50% 이상 visible 보장)
+    const rawGroupOffset = Math.floor((totalWidth - viewportWidth) / 2);
+    const maxGroupOffset = Math.floor(widths[0] / 2);
+    const initGroupOffset = Math.min(rawGroupOffset, maxGroupOffset);
     track.style.transform = `translateX(-${initGroupOffset}px)`;
   });
 }
