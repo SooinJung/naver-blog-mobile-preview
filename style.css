@@ -106,6 +106,13 @@
   cursor: pointer; max-width: 130px;
 }
 #mobile-preview-device option { background: #fff; color: #333; }
+#preview-scan-btn {
+  background: #e8e8e8; border: none; color: #555;
+  font-size: 13px; width: 20px; height: 20px; border-radius: 50%;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+#preview-scan-btn:hover { background: #d0d0d0; }
+#preview-scan-btn:disabled { opacity: 0.5; cursor: default; }
 #mobile-preview-close {
   background: #e8e8e8; border: none; color: #555;
   font-size: 11px; width: 20px; height: 20px; border-radius: 50%;

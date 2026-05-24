@@ -36,6 +36,7 @@ function createPanel() {
     <div id="mobile-preview-header">
       <span id="mobile-preview-title">📱 미리보기</span>
       <select id="mobile-preview-device">${deviceOptions}</select>
+      <button id="preview-scan-btn" title="전체 이미지 재스캔">⟳</button>
       <button id="mobile-preview-close">✕</button>
     </div>
 
@@ -639,6 +640,42 @@ function initCarousels() {
   });
 }
 
+// ── 에디터 전체 스캔 ──
+// SE4는 가상 스크롤(virtual rendering)을 사용해 뷰포트 안 컴포넌트만 DOM에 렌더링함.
+// 에디터를 맨 아래까지 instant 스크롤 후 복귀하면 SE4가 모든 컴포넌트를 DOM에 추가 →
+// 이후 getBodyHTML()이 전체 이미지를 읽을 수 있음.
+async function scanEditorContent() {
+  const btn = document.getElementById('preview-scan-btn');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+
+  const editorDoc = getIframeDoc();
+
+  // 스크롤 가능한 컨테이너 탐색 (iframe 내부 → outer 순)
+  const scrollEl =
+    editorDoc?.querySelector('.se-main-container, .se-editor, .se-wrapper') ||
+    editorDoc?.documentElement ||
+    document.querySelector('.se-main-container') ||
+    document.documentElement;
+
+  if (scrollEl) {
+    const savedTop  = scrollEl.scrollTop;
+    const maxTop    = scrollEl.scrollHeight - scrollEl.clientHeight;
+
+    if (maxTop > 0) {
+      // ① 맨 아래로 순간이동 (behavior:instant → 시각적 최소화)
+      scrollEl.scrollTop = maxTop;
+      // ② IntersectionObserver 콜백 대기 (비동기 처리 시간)
+      await new Promise(r => setTimeout(r, 400));
+      // ③ 원래 위치 복귀
+      scrollEl.scrollTop = savedTop;
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+
+  updatePreview();
+  if (btn) { btn.textContent = '⟳'; btn.disabled = false; }
+}
+
 function observeIframe() {
   const doc = getIframeDoc();
   if (!doc) return;
@@ -666,6 +703,10 @@ function init() {
     if (appbarName) appbarName.textContent = info.blogName;
   }, 1500);
   setTimeout(() => { observeIframe(); updatePreview(); }, 4000);
+
+  // ⟳ 버튼: 기존 글 수정 시 수동으로 전체 이미지 재스캔
+  document.getElementById('preview-scan-btn')
+    ?.addEventListener('click', () => scanEditorContent());
 
   // ── 닉네임 반영 공통 함수 ──
   function applyUserInfo(nickname, profileImg) {
