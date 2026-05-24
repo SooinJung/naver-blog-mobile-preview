@@ -420,14 +420,25 @@ function isPlaceholder(text) {
   return PLACEHOLDERS.some(p => text.trim().includes(p));
 }
 function validImgs(comp) {
-  return Array.from(comp.querySelectorAll('img')).filter(img =>
-    img.src && !img.src.startsWith('data:') && img.src !== window.location.href
-  ).map(img => ({
-    src: img.src,
-    // SmartEditor ONE이 data-width/data-height에 원본 비율 정보를 저장함
-    w: parseInt(img.getAttribute('data-width')  || 0),
-    h: parseInt(img.getAttribute('data-height') || 0),
-  }));
+  return Array.from(comp.querySelectorAll('img')).map(img => {
+    // SE4 lazy loading: 실제 URL이 data 속성에 있고 src는 placeholder일 수 있음
+    // 우선순위: data-lazy-src → data-src → data-url → src 순으로 실제 URL 추출
+    const src =
+      img.getAttribute('data-lazy-src') ||
+      img.getAttribute('data-src')      ||
+      img.getAttribute('data-url')      ||
+      img.src;
+
+    return {
+      src,
+      // SmartEditor ONE이 data-width/data-height에 원본 비율 정보를 저장함
+      w: parseInt(img.getAttribute('data-width')  || 0),
+      h: parseInt(img.getAttribute('data-height') || 0),
+    };
+  }).filter(({ src }) =>
+    // placeholder·빈값·data URI 제외
+    src && !src.startsWith('data:') && src !== window.location.href
+  );
 }
 
 // ── 이미지 블록 빌더 ──
@@ -590,17 +601,23 @@ function initCarousels() {
       return;
     }
 
-    // 현재 인덱스로 이동 (픽셀 기반 translateX — 실제 앱과 동일한 방식)
+    // 각 이미지로 이동 (개별 이미지 가운데 정렬 기반)
+    //
+    // 실제 네이버 앱 "중앙 기준 배치":
+    //   이미지[index]를 viewport 가운데에 놓는 idealCenterOffset 계산 후
+    //   0 ~ maxOffset 범위로 clamp
+    //   → 3장+ portrait 중간 이미지는 완전히 가운데 정렬됨
+    //   → 양 끝 이미지는 clamp되어 각각 왼쪽/오른쪽 경계에 닿음
+    const maxOffset = Math.max(0, totalWidth - viewportWidth);
+
     function goTo(index) {
       carousel.dataset.index = index;
-      // rawOffset = 이전 item들의 너비 합산 + item 사이 2px gap 포함
-      const rawOffset = widths.slice(0, index).reduce((a, b) => a + b, 0) + GAP * index;
-      // maxOffset 클램프: 마지막 이미지에서 오른쪽 빈 공간이 생기지 않도록
-      // → totalWidth - viewportWidth 이상 당기면 오른쪽 끝 콘텐츠가 viewport 오른쪽에 닿음
-      const maxOffset = Math.max(0, totalWidth - viewportWidth);
-      const offset = Math.min(rawOffset, maxOffset);
+      const itemStart = widths.slice(0, index).reduce((a, b) => a + b, 0) + GAP * index;
+      // 이 이미지를 viewport 가운데에 놓으려면 얼마나 당겨야 하는가
+      const idealOffset = itemStart - Math.floor((viewportWidth - widths[index]) / 2);
+      // 범위 내 clamp: 음수(왼쪽 넘어감) → 0, maxOffset 초과(오른쪽 여백) → maxOffset
+      const offset = Math.max(0, Math.min(idealOffset, maxOffset));
       track.style.transform = `translateX(-${offset}px)`;
-      // thumb: 너비(1/n) 고정, left 위치만 이동
       if (fill) fill.style.left = `${(index / n * 100).toFixed(1)}%`;
     }
 
@@ -613,6 +630,11 @@ function initCarousels() {
       const idx = parseInt(carousel.dataset.index);
       if (idx < n - 1) goTo(idx + 1);
     });
+
+    // 초기 상태: 전체 그룹을 viewport 가운데에 배치
+    // (세로 이미지 2장인 경우 양쪽이 균등하게 잘려 보임)
+    const initGroupOffset = Math.floor((totalWidth - viewportWidth) / 2);
+    track.style.transform = `translateX(-${initGroupOffset}px)`;
   });
 }
 
