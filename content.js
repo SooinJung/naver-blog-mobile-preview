@@ -633,15 +633,9 @@ function initCarousels() {
       if (idx < n - 1) goTo(idx + 1);
     });
 
-    // 초기 상태: 전체 그룹을 viewport 가운데에 배치
-    // (세로 이미지 2장인 경우 양쪽이 균등하게 잘려 보임)
-    //
-    // 단, offset이 너무 크면 이미지1이 화면 밖으로 완전히 나가서 lazy load 지연 발생
-    // → 이미지1 너비의 절반 이하로 clamp (이미지1 항상 50% 이상 visible 보장)
-    const rawGroupOffset = Math.floor((totalWidth - viewportWidth) / 2);
-    const maxGroupOffset = Math.floor(widths[0] / 2);
-    const initGroupOffset = Math.min(rawGroupOffset, maxGroupOffset);
-    track.style.transform = `translateX(-${initGroupOffset}px)`;
+    // 초기 상태: index=0, translateX=0 (이미지1 왼쪽부터 표시)
+    // goTo()의 idealOffset 기반 centering은 버튼 탭 시에만 적용
+    track.style.transform = 'translateX(0)';
   });
 }
 
