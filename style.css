@@ -1,3 +1,77 @@
+/* ── 네이버 SE4 커스텀 웹폰트 (se-ff-* 클래스에서 참조하는 font-family명과 동일하게 맞춤) ── */
+/*
+  se.viewer.css 실측 클래스 → font-family 매핑:
+    se-ff-system           → -apple-system, HelveticaNeue, ... (기본 서체, 웹폰트 불필요)
+    se-ff-nanumgothic      → se-nanumgothic (나눔고딕)
+    se-ff-nanummyeongjo    → se-nanummyeongjo (나눔명조)
+    se-ff-nanumbarungothic → se-nanumbarungothic (나눔바른고딕)
+    se-ff-nanumsquare      → se-nanumsquare (나눔스퀘어)
+    se-ff-nanummaruburi    → se-nanummaruburi (마루부리)
+    se-ff-nanumdasisijaghae    → se-nanumdasisijaghae (다시시작해)
+    se-ff-nanumbareunhipi      → se-nanumbareunhipi (바른히피)
+    se-ff-nanumuriddalsongeulssi → se-nanumuriddalsongeulssi (우리딸손글씨)
+    se-ff-pretendard       → se-pretendard (프리텐다드)
+*/
+@font-face {
+  font-family: 'se-nanumgothic';
+  src: url('https://editor-static.pstatic.net/c/resources/common/fonts/se-nanumgothic-regular.woff2') format('woff2');
+  font-weight: normal; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'se-nanummyeongjo';
+  src: url('https://editor-static.pstatic.net/c/resources/common/fonts/se-nanummyeongjo-regular.woff2') format('woff2');
+  font-weight: normal; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'se-nanumbarungothic';
+  src: url('https://editor-static.pstatic.net/c/resources/common/fonts/se-nanumbarungothic-regular.woff2') format('woff2');
+  font-weight: normal; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'se-nanumsquare';
+  src: url('https://editor-static.pstatic.net/c/resources/common/fonts/se-nanumsquare-regular.woff2') format('woff2');
+  font-weight: normal; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'se-nanummaruburi';
+  src: url('https://editor-static.pstatic.net/c/resources/common/fonts/se-nanummaruburi-regular.woff2') format('woff2');
+  font-weight: normal; font-style: normal; font-display: swap;
+}
+
+/* ── SE4 폰트 클래스 (se.viewer.css 실측값 그대로) ── */
+/* 에디터 DOM에서 가져온 span의 se-ff-* 클래스가 미리보기 패널에서도 올바르게 렌더링되도록 */
+#preview-content .se-ff-system {
+  font-family: -apple-system, HelveticaNeue, "Helvetica Neue", helvetica,
+               AppleSDGothicNeo, arial, "malgun gothic", "맑은 고딕", sans-serif !important;
+}
+#preview-content .se-ff-nanumgothic {
+  font-family: se-nanumgothic, arial, 나눔고딕, nanumgothic, sans-serif !important;
+}
+#preview-content .se-ff-nanummyeongjo {
+  font-family: se-nanummyeongjo, arial, 나눔명조, nanummyeongjo, serif !important;
+}
+#preview-content .se-ff-nanumbarungothic {
+  font-family: se-nanumbarungothic, arial, 나눔바른고딕, nanumbarungothic, sans-serif !important;
+}
+#preview-content .se-ff-nanumsquare {
+  font-family: se-nanumsquare, arial, 나눔스퀘어, nanumsquare, sans-serif !important;
+}
+#preview-content .se-ff-nanummaruburi {
+  font-family: se-nanummaruburi, arial, 마루부리, nanummaruburi, sans-serif !important;
+}
+#preview-content .se-ff-nanumdasisijaghae {
+  font-family: se-nanumdasisijaghae, arial, 다시시작해, nanumdasisijaghae, sans-serif !important;
+}
+#preview-content .se-ff-nanumbareunhipi {
+  font-family: se-nanumbareunhipi, arial, 바른히피, nanumbareunhipi, sans-serif !important;
+}
+#preview-content .se-ff-nanumuriddalsongeulssi {
+  font-family: se-nanumuriddalsongeulssi, arial, 우리딸손글씨, nanumuriddalsongeulssi, sans-serif !important;
+}
+#preview-content .se-ff-pretendard {
+  font-family: se-pretendard, Pretendard, arial, sans-serif !important;
+}
+
 /* ── 패널 전체 ── */
 #mobile-preview-panel {
   position: fixed;
@@ -14,28 +88,30 @@
   transition: width 0.2s ease;
 }
 
-/* ── 컨트롤 바 ── */
+/* ── 컨트롤 바 (익스텐션 자체 UI — 폰 화면 밖) ── */
 #mobile-preview-header {
-  background: #03C75A;
-  color: white;
-  padding: 8px 12px;
+  background: #f8f8f8;
+  color: #333;
+  padding: 7px 10px;
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  border-bottom: 1px solid #e0e0e0;
 }
-#mobile-preview-title { font-size: 12px; font-weight: bold; flex: 1; }
+#mobile-preview-title { font-size: 11px; font-weight: 600; flex: 1; color: #555; }
 #mobile-preview-device {
-  font-size: 10px; padding: 3px 5px; border-radius: 5px; border: none;
-  background: rgba(255,255,255,0.25); color: white; cursor: pointer; max-width: 130px;
+  font-size: 10px; padding: 3px 5px; border-radius: 5px;
+  border: 1px solid #ddd; background: #fff; color: #333;
+  cursor: pointer; max-width: 130px;
 }
 #mobile-preview-device option { background: #fff; color: #333; }
 #mobile-preview-close {
-  background: rgba(255,255,255,0.2); border: none; color: white;
-  font-size: 12px; width: 22px; height: 22px; border-radius: 50%;
+  background: #e8e8e8; border: none; color: #555;
+  font-size: 11px; width: 20px; height: 20px; border-radius: 50%;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
-#mobile-preview-close:hover { background: rgba(255,255,255,0.35); }
+#mobile-preview-close:hover { background: #d0d0d0; }
 
 /* ── 폰 화면 전체 ── */
 #phone-screen {
@@ -92,6 +168,8 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  /* 기본값은 시스템 폰트 (se-ff-system = 기본 서체).
+     다른 폰트는 span의 se-ff-* 클래스 규칙이 덮어씀. */
   font-family: -apple-system, HelveticaNeue, "Helvetica Neue", helvetica,
                AppleSDGothicNeo, arial, "malgun gothic", "맑은 고딕", sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -127,6 +205,12 @@
   width: 34px; height: 34px; border-radius: 50%;
   background: #e8f5e9; display: flex; align-items: center; justify-content: center;
   font-size: 14px; color: #03C75A; flex-shrink: 0;
+  overflow: hidden;  /* 프로필 이미지가 원형 밖으로 삐져나오지 않게 */
+}
+/* 프로필 이미지: fetch 성공 시 ✦ 대신 표시 */
+.author-avatar img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
 }
 .author-info { display: flex; flex-direction: column; flex: 1; }
 .author-name { font-size: 13px; font-weight: 600; color: #222; }
@@ -138,23 +222,31 @@
 }
 
 /* ── 실제 콘텐츠 ── */
+/*
+  se.viewer.css 실측값:
+    .se-fs-fs13       → font-size: 15px  (이름은 fs13이지만 실제 렌더 크기는 15px)
+    line-height       → 1.8  (se-section-text.se-l-default .se-text-paragraph)
+    word-break        → break-word
+  ※ white-space: pre-wrap 은 se.viewer.css 에서는 맞지만 에디터 DOM의 p.innerHTML은
+     들여쓰기 개행(\n    )이 포함되어 있어 pre-wrap 적용 시 단락마다 빈 줄이 생성됨 → 제거
+*/
 #preview-content {
-  padding: 8px 16px 16px;
-  font-size: 13px;
-  line-height: 23.4px;
+  padding: 8px 20px 16px;
+  font-size: 15px;             /* 실제 네이버 se-fs-fs13 = 15px */
+  line-height: 27px;           /* 15px × 1.8 */
   color: rgb(68, 68, 68);
   font-weight: 400;
   word-break: break-word;
   overflow-wrap: break-word;
 }
-#preview-content p { margin: 0; min-height: 23.4px; }
-.preview-blank { min-height: 23.4px; }
+#preview-content p { margin: 0; min-height: 27px; }
+.preview-blank { min-height: 27px; }
 /* ── 단일 이미지: full-bleed + 원본 비율 유지 ── */
 /* aspect-ratio는 JS에서 인라인으로 설정 → 로드 전 공간 미리 확보 */
 .preview-single-img {
   display: block;
-  width: calc(100% + 32px);
-  margin: 8px -16px 0;
+  width: calc(100% + 40px);
+  margin: 20px -20px 20px;  /* 상단 20px: --se-imageGroup-base-spacing-mobile, 하단 20px: imageGroup→text 간격 */
   height: auto;
 }
 
@@ -169,8 +261,8 @@
 */
 .preview-carousel {
   position: relative;
-  width: calc(100% + 32px);
-  margin: 8px -16px 0;  /* full-bleed */
+  width: calc(100% + 40px);
+  margin: 20px -20px 20px;  /* 상단 20px: --se-imageGroup-base-spacing-mobile, 하단 20px: imageGroup→text 간격 */
 }
 
 .preview-carousel-viewport {
@@ -192,6 +284,10 @@
   flex-shrink: 0;
   height: 100%;
   /* 너비: JS inline style="width:Xpx" (이미지 비율에 따라 계산) */
+}
+/* 이미지 간 2px 간격 (실제 네이버: se-imageGroup-item margin-left:2px, 첫 번째 제외) */
+.preview-carousel-item + .preview-carousel-item {
+  margin-left: 2px;
 }
 
 .preview-carousel-img {
@@ -225,33 +321,48 @@
 .preview-carousel-prev { left: 8px; }
 .preview-carousel-next { right: 8px; }
 
-/* ── 진행 바 (실제 네이버 앱: thumb 위치 인디케이터 방식) ── */
+/* ── 진행 바 (실제 네이버 앱: se-imageGroup-progress 방식) ── */
 /*
-  실제 네이버: se-imageGroup-progress + se-imageGroup-thumb
-    - thumb 너비 = 1/n (장수에 따라 초기 고정)
-    - thumb left  = index/n × 100% (현재 위치에 따라 이동)
-    - width 애니메이션 X → left 애니메이션 O
+  실제 네이버 se.viewer.css 실측값:
+    .se-imageGroup-progress { margin-top:8px; height:24px; margin-left:auto; margin-right:auto; max-width:700px }
+    → 이미지는 full-bleed, 슬라이더 바는 콘텐츠 폭(side-padding 안쪽)에 맞게 위치
+    → 캐러셀(calc(100%+40px)) 내에서 margin: 8px 20px 0 → 실제 콘텐츠 폭과 일치
+    회색 트랙(:before)  { top:5px; height:3px; background:#d8d8d8 }
+    검정 thumb(:before) { top:5px; height:5px; background:#000 }
+  총 이미지→텍스트 간격: 8(margin)+24(height)+20(next component margin) = 52px
 */
 .preview-carousel .preview-slider-bar {
-  margin: 4px 0 16px;
-  width: 100%;
-  position: relative;  /* thumb의 absolute 기준점 */
+  margin: 8px 20px 0;  /* top:8px, 좌우 20px → 이미지 full-bleed 내에서 콘텐츠 폭으로 축소 */
+  height: 24px;        /* 실제: height:24px */
+  background: transparent;
+  position: relative;
+}
+/* 회색 트랙 */
+.preview-carousel .preview-slider-bar::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #d8d8d8;
+  border-radius: 1.5px;
 }
 .preview-slider-bar {
   height: 5px;
   background: #e0e0e0;
-  margin: 8px -16px 16px;  /* full-bleed (단독 사용 시) */
-  width: calc(100% + 32px);
+  margin: 8px -20px 16px;  /* full-bleed (단독 사용 시 fallback) */
+  width: calc(100% + 40px);
   position: relative;
 }
 .preview-slider-bar-fill {
   position: absolute;
-  top: 0;
-  left: 0;  /* JS에서 index/n × 100% 로 갱신 */
-  height: 100%;
+  top: 5px;             /* 실제: top:5px */
+  left: 0;              /* JS에서 index/n × 100% 로 갱신 */
+  height: 5px;          /* 실제: height:5px */
   background: #111;
-  border-radius: 2.5px;   /* pill 모양 (좌우 이동하는 thumb) */
-  transition: left 0.3s ease;  /* left 이동 애니메이션 */
+  border-radius: 2.5px;
+  transition: left 0.3s ease;
 }
 
 /* ── 좋아요·댓글·공유 바 ── */
@@ -284,6 +395,51 @@
   font-weight: 900;
   font-size: 16px;
   color: #03C75A;
+}
+
+/* ── 단독 이미지 (se-image): 여백 있음, max-width 720px ── */
+/*
+  se-imageGroup (2장+)  → .preview-single-img (full-bleed) ← 기존
+  se-image (단독 1장)   → .preview-single-img--contained  ← 신규
+*/
+.preview-single-img--contained {
+  display: block;
+  width: auto;
+  max-width: 100%;         /* 패널 너비 내에서 최대한 */
+  margin: 20px auto 20px;  /* 상단 20px: --se-imageGroup-base-spacing-mobile, 좌우 auto = 가운데 정렬 */
+  height: auto;
+}
+
+/* ── 스티커 (se-sticker): 소형 인라인 이미지 ── */
+/*
+  실제 네이버 모바일: se-module-sticker img style="p100_100"
+  → CDN에서 100×100px으로 리사이즈해서 제공 = 실제 렌더링 크기 100px
+*/
+.preview-sticker {
+  display: block;
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+  margin: 4px 20px 8px;
+}
+
+/* ── 이미지 캡션 (se-caption) ── */
+/*
+  실제 네이버 se.viewer.css:
+    --se-imageGroup-base-spacing-caption-top: 10px     (이미지→캡션)
+    --se-imageGroup-base-spacing-caption-bottom: 20px  (캡션→다음 콘텐츠)
+  이미지 margin-bottom = 20px, 캡션 margin-top = -10px → 이미지→캡션 = 10px
+*/
+#preview-content p.preview-caption {
+  font-size: 12px;
+  color: #999;
+  line-height: 1.6;
+  min-height: unset;
+  margin-top: -10px;    /* 이미지 margin-bottom(20px) - 10px = 이미지→캡션 10px */
+  margin-bottom: 20px;  /* 캡션→다음 콘텐츠 20px */
+  text-align: center;   /* 실제 네이버: 캡션 가운데 정렬 */
+  white-space: normal;
+  padding: 0 4px;
 }
 
 /* ── 플로팅 재열기 버튼 ── */

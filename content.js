@@ -158,6 +158,167 @@ function createPanel() {
   return panel;
 }
 
+// 카테고리 동적 추출 (에디터 DOM 여러 셀렉터 시도)
+function getCategory() {
+  const doc = getIframeDoc() || document;
+  const selectors = [
+    'select[name="categoryNo"] option:checked',
+    'select[name="category"] option:checked',
+    '.category_name', '#categoryName', '.pcm_category .category',
+    '._cur_category', '.blog_category a',
+  ];
+  for (const sel of selectors) {
+    const el = doc.querySelector(sel) || document.querySelector(sel);
+    const text = (el?.value || el?.innerText || '').trim();
+    if (text && text !== '카테고리' && text !== '-- 카테고리 --') return text;
+  }
+  return '';
+}
+
+// blogId 정확하게 추출 (path 방식 + query param 방식 모두 지원)
+// - /shanaren_/PostWrite          → "shanaren_"
+// - /PostWrite.naver?blogId=shanaren_ → "shanaren_"
+function extractBlogId() {
+  const url = new URL(window.location.href);
+
+  // 방식 1: query param (?blogId=xxx)
+  const fromQuery = url.searchParams.get('blogId');
+  if (fromQuery) return fromQuery;
+
+  // 방식 2: path 첫 번째 세그먼트 (/shanaren_/...)
+  //   네이버 자체 경로명은 제외 (PostWrite, PostView 등)
+  const NAVER_PATHS = ['postwrite', 'postview', 'postlist', 'postsearch',
+                       'about', 'guestbook', 'redirect', 'bloginfo'];
+  const first = (url.pathname.split('/').filter(Boolean)[0] || '');
+  if (first && !first.includes('.') && !NAVER_PATHS.includes(first.toLowerCase())) {
+    return first;
+  }
+  return '';
+}
+
+// ── Step 1: 현재 에디터 페이지의 inline script에서 닉네임 즉시 추출 ──
+// Naver는 SSR 데이터를 <script> 태그 안 JSON으로 심어두는 경우가 많음
+function getNicknameFromCurrentPage() {
+  const patterns = [
+    /"nickName"\s*:\s*"([^"]+)"/,
+    /"nick"\s*:\s*"([^"]+)"/,
+    /"nickname"\s*:\s*"([^"]+)"/,
+    /"blogNickName"\s*:\s*"([^"]+)"/,
+    /"ownerNickName"\s*:\s*"([^"]+)"/,
+    /"writerNickName"\s*:\s*"([^"]+)"/,
+  ];
+  for (const script of document.querySelectorAll('script:not([src])')) {
+    for (const pat of patterns) {
+      const m = script.textContent.match(pat);
+      if (m?.[1]) return m[1];
+    }
+  }
+  return null;
+}
+
+// ── Step 2: 서버사이드 렌더링 페이지를 fetch해서 닉네임 + 프로필 이미지 추출 ──
+// PostList.naver는 Java/JSP 기반 서버렌더링 → HTML에 프로필 정보 포함
+async function fetchBlogUserInfo(blogId) {
+  if (!blogId) return {};
+
+  const parser = new DOMParser();
+
+  // 파싱한 doc에서 닉네임·프로필 이미지 추출
+  function extractFromDoc(doc) {
+    let nickname = null;
+    let profileImg = null;
+
+    const nickSelectors = [
+      '.nick', '.nickname', '.blog_nickname', '.BlogNickname',
+      '.blog_name', '#blog_name', '.blogger_name', '.my_nick',
+      '.profile_info .name', '.blog-title .name',
+    ];
+    for (const sel of nickSelectors) {
+      const text = doc.querySelector(sel)?.textContent?.trim();
+      if (text) { nickname = text; break; }
+    }
+
+    // script 태그 안 JSON 스캔
+    if (!nickname) {
+      const patterns = [
+        /"nickName"\s*:\s*"([^"]+)"/,
+        /"nick"\s*:\s*"([^"]+)"/,
+        /"blogNickName"\s*:\s*"([^"]+)"/,
+        /"ownerNickName"\s*:\s*"([^"]+)"/,
+      ];
+      for (const script of doc.querySelectorAll('script:not([src])')) {
+        for (const pat of patterns) {
+          const m = script.textContent.match(pat);
+          if (m?.[1]) { nickname = m[1]; break; }
+        }
+        if (nickname) break;
+      }
+    }
+
+    // og:title fallback
+    if (!nickname) {
+      const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || '';
+      const m = ogTitle.match(/^(.+?)\s*[:：]/);
+      if (m) nickname = m[1].trim();
+    }
+
+    // 프로필 이미지
+    const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
+    const profileImgSrc = doc.querySelector(
+      '.profile_img img, .blog_profile img, .writer_thumb img, .author img'
+    )?.src || '';
+    const candidate = ogImage || profileImgSrc;
+    if (candidate && !candidate.includes('bloglog') && !candidate.includes('default_thumbnail')) {
+      profileImg = candidate;
+    }
+
+    return { nickname, profileImg };
+  }
+
+  // 한 URL을 fetch → frameset이면 mainFrame까지 따라가기
+  async function fetchAndParse(url) {
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const frameset = doc.querySelector('frameset');
+    if (frameset) {
+      const mainFrame = doc.querySelector('frame[name="mainFrame"]') || doc.querySelector('frame');
+      if (mainFrame) {
+        const frameUrl = new URL(mainFrame.getAttribute('src'), 'https://blog.naver.com').href;
+        console.log('[미리보기] frameset 감지 → mainFrame fetch:', frameUrl);
+        return fetchAndParse(frameUrl);
+      }
+    }
+    return doc;
+  }
+
+  // 시도할 URL 순서 (서버사이드 렌더링 페이지 우선)
+  const urls = [
+    `https://blog.naver.com/PostList.naver?blogId=${blogId}&currentPage=1`,
+    `https://blog.naver.com/${blogId}`,
+  ];
+
+  for (const url of urls) {
+    try {
+      console.log('[미리보기] fetch 시도:', url);
+      const doc = await fetchAndParse(url);
+      if (!doc) continue;
+      const result = extractFromDoc(doc);
+      if (result.nickname || result.profileImg) {
+        console.log('[미리보기] fetch 결과 →', result);
+        return result;
+      }
+    } catch (e) {
+      console.log('[미리보기] fetch 실패:', url, e);
+    }
+  }
+
+  console.log('[미리보기] 모든 fetch 실패');
+  return {};
+}
+
 // 블로그 정보 동적 추출
 function getBlogInfo() {
   // 1) 블로그 이름: document.title = "사월寫 : 네이버 블로그" 형식
@@ -165,10 +326,8 @@ function getBlogInfo() {
   const titleMatch = document.title.match(/^(.+?)\s*[:：]\s*네이버 블로그/);
   if (titleMatch) blogName = titleMatch[1].trim();
 
-  // 2) 블로그 ID: URL에서 추출
-  let blogId = '';
-  const urlMatch = window.location.href.match(/blog\.naver\.com\/([^/?&#]+)/);
-  if (urlMatch) blogId = urlMatch[1];
+  // 2) 블로그 ID: URL에서 정확히 추출 (path·query param 모두 지원)
+  const blogId = extractBlogId();
 
   // 3) 작성자 닉네임: DOM 탐색 (여러 셀렉터 시도)
   const nickSelectors = [
@@ -188,7 +347,10 @@ function getBlogInfo() {
   // 4) 날짜: 오늘
   const now = new Date();
   const dateStr = `${now.getFullYear()}. ${now.getMonth()+1}. ${now.getDate()}.`;
-  const yearStr = String(now.getFullYear());
+
+  // 5) 카테고리: 추출 성공 시 카테고리명, 실패 시 연도 fallback
+  const category = getCategory();
+  const yearStr = category || String(now.getFullYear());
 
   return { blogName, blogId, authorName, dateStr, yearStr };
 }
@@ -274,17 +436,22 @@ function validImgs(comp) {
 //   - 가로(landscape) 이미지: item 너비 ≈ 뷰어 너비 → 1장씩 보임
 //   - 세로(portrait)  이미지: item 너비가 좁아져 → 여러 장 동시에 보임
 //   - 모든 item 합계 너비 ≤ 뷰어 너비 → 스크롤 불필요 → 진행 바 숨김
+//
+// isStandalone: se-image(단독 컴포넌트) = true → max-width 처리
+//               se-imageGroup(그룹)      = false → full-bleed
 const VIEWER_H = 294; // iPhone 16 기준 가로 이미지 뷰어 높이 (393 × 3/4)
 
-function buildImageBlock(imgs) {
+function buildImageBlock(imgs, isStandalone = false) {
   const n = imgs.length;
   if (n === 0) return '';
 
   if (n === 1) {
-    // 1장: full-bleed, 원본 비율 유지 (aspect-ratio로 로드 전 공간 확보)
+    // 1장: 원본 비율 유지 (aspect-ratio로 로드 전 공간 확보)
     const { src, w, h } = imgs[0];
     const ratioStyle = (w && h) ? ` style="aspect-ratio:${w}/${h}"` : '';
-    return `<img src="${src}" class="preview-single-img"${ratioStyle}>`;
+    // se-image 단독 → max-width(여백 있음), se-imageGroup 1장 → full-bleed
+    const cls = isStandalone ? 'preview-single-img preview-single-img--contained' : 'preview-single-img';
+    return `<img src="${src}" class="${cls}"${ratioStyle}>`;
   }
 
   // 2장+: 실제 네이버 앱 방식
@@ -324,14 +491,27 @@ function getBodyHTML() {
       // 제목 컴포넌트는 body에서 제외
       if (titleComponent && (comp === titleComponent || comp.contains(titleComponent) || titleComponent.contains(comp))) return;
 
+      // ① 스티커: 풀사이즈 이미지로 렌더링되지 않도록 별도 처리
+      if (comp.classList.contains('se-sticker')) {
+        const img = comp.querySelector('img.se-sticker-image, img');
+        if (img) html += `<img src="${img.src}" class="preview-sticker" alt="">`;
+        return;
+      }
+
+      // ② se-image(단독) vs se-imageGroup(그룹) 구분 → max-width 여부 결정
+      const isStandalone = comp.classList.contains('se-image') && !comp.classList.contains('se-imageGroup');
       const imgs = validImgs(comp);
       if (imgs.length > 0) {
-        html += buildImageBlock(imgs);
+        html += buildImageBlock(imgs, isStandalone);
       }
+
+      // ③ 텍스트: 캡션 클래스 감지해서 별도 스타일 적용
       comp.querySelectorAll('.se-text-paragraph').forEach(p => {
         const text = p.innerText.trim();
         if (isPlaceholder(text)) return;
-        html += text === '' ? `<p class="preview-blank">&nbsp;</p>` : `<p>${p.innerHTML}</p>`;
+        const isCaption = !!p.closest('.se-caption');
+        const cls = isCaption ? ' class="preview-caption"' : '';
+        html += text === '' ? `<p class="preview-blank">&nbsp;</p>` : `<p${cls}>${p.innerHTML}</p>`;
       });
     });
   }
@@ -346,6 +526,13 @@ function getBodyHTML() {
 }
 
 function updatePreview() {
+  // 카테고리/연도 업데이트
+  const yearEl = document.querySelector('.post-year');
+  if (yearEl) {
+    const cat = getCategory();
+    if (cat) yearEl.textContent = cat;
+  }
+
   // 제목 업데이트 (iframe 준비 후 추출)
   const titleEl = document.getElementById('preview-post-title');
   if (titleEl) {
@@ -378,13 +565,25 @@ function initCarousels() {
     const n        = parseInt(carousel.dataset.count);
     const widths   = (carousel.dataset.widths || '').split(',').map(Number);
 
-    // 총 item 너비 합계 vs 뷰어 너비 비교
-    const totalWidth    = widths.reduce((a, b) => a + b, 0);
+    // 총 item 너비 합계 vs 뷰어 너비 비교 (item 사이 2px gap 포함)
+    const GAP = 2;
+    const totalWidth    = widths.reduce((a, b) => a + b, 0) + GAP * (n - 1);
     const viewportWidth = viewport.offsetWidth || viewport.clientWidth || 360;
 
     // 모든 이미지가 뷰어에 한 번에 다 들어오면 → 화살표/진행 바 숨기기
     // (실제 네이버 앱과 동일: se-imageGroup-progress display:none)
     if (totalWidth <= viewportWidth) {
+      // 세로(portrait) 이미지가 여러 장 동시에 보일 때 → 가운데 정렬
+      //
+      // ❌ track에 justify-content:center → track이 block-level flex라 width:auto로
+      //    viewport 전체를 채움. flex 아이템은 flex-start 기준이라 왼쪽 정렬 그대로.
+      //
+      // ✅ viewport를 flex 컨테이너로 바꾸면 track이 flex item이 되어
+      //    content 크기(totalWidth)로 자동 축소 → viewport의 justify-content:center로
+      //    track 자체가 양쪽 균등 여백으로 가운데 정렬됨
+      viewport.style.display        = 'flex';
+      viewport.style.justifyContent = 'center';
+      viewport.style.alignItems     = 'stretch'; // track 높이 유지 (height:100% 보전)
       if (bar)     bar.style.display     = 'none';
       if (prevBtn) prevBtn.style.display = 'none';
       if (nextBtn) nextBtn.style.display = 'none';
@@ -394,8 +593,12 @@ function initCarousels() {
     // 현재 인덱스로 이동 (픽셀 기반 translateX — 실제 앱과 동일한 방식)
     function goTo(index) {
       carousel.dataset.index = index;
-      // offset = 이전 item들의 너비 합산 (픽셀)
-      const offset = widths.slice(0, index).reduce((a, b) => a + b, 0);
+      // rawOffset = 이전 item들의 너비 합산 + item 사이 2px gap 포함
+      const rawOffset = widths.slice(0, index).reduce((a, b) => a + b, 0) + GAP * index;
+      // maxOffset 클램프: 마지막 이미지에서 오른쪽 빈 공간이 생기지 않도록
+      // → totalWidth - viewportWidth 이상 당기면 오른쪽 끝 콘텐츠가 viewport 오른쪽에 닿음
+      const maxOffset = Math.max(0, totalWidth - viewportWidth);
+      const offset = Math.min(rawOffset, maxOffset);
       track.style.transform = `translateX(-${offset}px)`;
       // thumb: 너비(1/n) 고정, left 위치만 이동
       if (fill) fill.style.left = `${(index / n * 100).toFixed(1)}%`;
@@ -434,14 +637,45 @@ function init() {
   setTimeout(() => {
     observeIframe();
     updatePreview();
-    // iframe 로딩 후 작성자 정보 정밀 업데이트
+    // appbar 블로그 이름만 갱신 (author 닉네임은 applyUserInfo가 담당 — 덮어쓰지 않음)
     const info = getBlogInfo();
-    const authorEl = document.getElementById('preview-author-name');
-    if (authorEl) authorEl.textContent = info.authorName;
     const appbarName = document.querySelector('.appbar-blog-name');
     if (appbarName) appbarName.textContent = info.blogName;
   }, 1500);
   setTimeout(() => { observeIframe(); updatePreview(); }, 4000);
+
+  // ── 닉네임 반영 공통 함수 ──
+  function applyUserInfo(nickname, profileImg) {
+    if (nickname) {
+      const authorEl = document.getElementById('preview-author-name');
+      if (authorEl) authorEl.textContent = nickname;
+    }
+    if (profileImg) {
+      const avatarEl = document.querySelector('.author-avatar');
+      if (avatarEl) {
+        const img = document.createElement('img');
+        img.src = profileImg;
+        img.alt = nickname || '프로필';
+        avatarEl.textContent = '';   // ✦ 기호 제거
+        avatarEl.appendChild(img);
+      }
+    }
+  }
+
+  // Step 1: 현재 페이지 script 태그 즉시 스캔 (네트워크 요청 없음)
+  const nickFromPage = getNicknameFromCurrentPage();
+  if (nickFromPage) {
+    console.log('[미리보기] 현재 페이지에서 닉네임 발견:', nickFromPage);
+    applyUserInfo(nickFromPage, null);
+  }
+
+  // Step 2: 그래도 없으면 외부 페이지 fetch
+  const blogId = extractBlogId();
+  if (blogId && !nickFromPage) {
+    fetchBlogUserInfo(blogId).then(({ nickname, profileImg }) => {
+      applyUserInfo(nickname, profileImg);
+    });
+  }
 }
 
 if (document.readyState === 'loading') {

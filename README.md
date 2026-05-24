@@ -42,9 +42,17 @@
 
 ```
 naver_blog/
-├── manifest.json   # 익스텐션 메타정보 (Manifest V3)
-├── content.js      # 핵심 로직 (패널 생성 + 실시간 감지)
-└── style.css       # 패널 UI 스타일
+├── manifest.json        # 익스텐션 메타정보 (Manifest V3)
+├── content.js           # 핵심 로직 (패널 생성 + 실시간 감지)
+├── style.css            # 패널 UI 스타일
+│
+├── docs/                # 문서
+│   ├── mobile_design_spec.md   # 실제 네이버 모바일 디자인 스펙 (phone 분석 결과)
+│   └── TODO.md                 # 미해결 이슈 & 개선 사항 트래커 (해결 완료 항목 포함)
+│
+└── reference/           # 레퍼런스 HTML 원본
+    ├── phone            # 실제 네이버 블로그 모바일 페이지 전체 HTML
+    └── phone_1          # 이미지 슬라이드 컴포넌트 HTML 스니펫
 ```
 
 ### 동작 방식
