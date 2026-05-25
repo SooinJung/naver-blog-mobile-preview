@@ -476,8 +476,9 @@
     --se-imageGroup-base-spacing-caption-bottom: 20px  (캡션→다음 콘텐츠)
   이미지 margin-bottom = 20px, 캡션 margin-top = -10px → 이미지→캡션 = 10px
 */
-#preview-content p.preview-caption {
-  font-size: 12px;
+#preview-content p.preview-caption,
+#preview-content p.preview-caption span {
+  font-size: 12px !important;  /* se-fs* !important 규칙에 덮어쓰임 방지 */
   color: #999;
   line-height: 1.6;
   min-height: unset;
