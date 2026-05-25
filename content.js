@@ -495,6 +495,12 @@ function buildImageBlock(imgs, isStandalone = false) {
   </div>`;
 }
 
+// span 끝 공백이 줄 끝에 걸릴 때 CSS가 제거하는 현상 방지
+// " </tag>" → "&nbsp;</tag>" 로 치환
+function preserveSpaces(html) {
+  return html.replace(/ +(<\/[a-zA-Z]+>)/g, (match, tag) => ' '.repeat(match.length - tag.length) + tag);
+}
+
 function getBodyHTML() {
   const doc = getIframeDoc() || document;
   let html = '';
@@ -525,7 +531,7 @@ function getBodyHTML() {
         if (isPlaceholder(text)) return;
         const isCaption = !!p.closest('.se-caption');
         const cls = isCaption ? ' class="preview-caption"' : '';
-        html += text === '' ? `<p class="preview-blank">&nbsp;</p>` : `<p${cls}>${p.innerHTML}</p>`;
+        html += text === '' ? `<p class="preview-blank">&nbsp;</p>` : `<p${cls}>${preserveSpaces(p.innerHTML)}</p>`;
       });
     });
   }
@@ -533,7 +539,7 @@ function getBodyHTML() {
     doc.querySelectorAll('.se-text-paragraph').forEach(p => {
       const text = p.innerText.trim();
       if (isPlaceholder(text)) return;
-      html += text === '' ? `<p class="preview-blank">&nbsp;</p>` : `<p>${p.innerHTML}</p>`;
+      html += text === '' ? `<p class="preview-blank">&nbsp;</p>` : `<p>${preserveSpaces(p.innerHTML)}</p>`;
     });
   }
   return html || null;
