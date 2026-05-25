@@ -243,29 +243,28 @@
   white-space: nowrap;
 }
 
-/* ── SE4 폰트 사이즈 클래스 (se-fs-fs*) ── */
+/* ── SE4 폰트 사이즈 클래스 (se-fs*) ── */
 /*
-  se.viewer.css 실측값:
-    .se-fs-fs13 → font-size: 15px  (이름은 fs13이지만 실제 렌더 크기는 15px)
-  그 외 사이즈는 클래스 번호 = px 직접 매핑
+  에디터 DOM 실제 클래스명: se-fs13, se-fs28 등 (se-fs-fs* 아님!)
+  se-fs13 → 실측 15px, 나머지는 번호 = px 직접 매핑
 */
-#preview-content .se-fs-fs9  { font-size: 9px  !important; line-height: 1.8; }
-#preview-content .se-fs-fs10 { font-size: 10px !important; line-height: 1.8; }
-#preview-content .se-fs-fs11 { font-size: 11px !important; line-height: 1.8; }
-#preview-content .se-fs-fs12 { font-size: 12px !important; line-height: 1.8; }
-#preview-content .se-fs-fs13 { font-size: 15px !important; line-height: 1.8; } /* 실측 15px */
-#preview-content .se-fs-fs14 { font-size: 14px !important; line-height: 1.8; }
-#preview-content .se-fs-fs15 { font-size: 15px !important; line-height: 1.8; }
-#preview-content .se-fs-fs16 { font-size: 16px !important; line-height: 1.8; }
-#preview-content .se-fs-fs17 { font-size: 17px !important; line-height: 1.8; }
-#preview-content .se-fs-fs18 { font-size: 18px !important; line-height: 1.8; }
-#preview-content .se-fs-fs19 { font-size: 19px !important; line-height: 1.8; }
-#preview-content .se-fs-fs20 { font-size: 20px !important; line-height: 1.8; }
-#preview-content .se-fs-fs22 { font-size: 22px !important; line-height: 1.6; }
-#preview-content .se-fs-fs24 { font-size: 24px !important; line-height: 1.6; }
-#preview-content .se-fs-fs28 { font-size: 28px !important; line-height: 1.5; }
-#preview-content .se-fs-fs34 { font-size: 34px !important; line-height: 1.4; }
-#preview-content .se-fs-fs38 { font-size: 38px !important; line-height: 1.4; }
+#preview-content .se-fs9  { font-size: 9px  !important; line-height: 1.8; }
+#preview-content .se-fs10 { font-size: 10px !important; line-height: 1.8; }
+#preview-content .se-fs11 { font-size: 11px !important; line-height: 1.8; }
+#preview-content .se-fs12 { font-size: 12px !important; line-height: 1.8; }
+#preview-content .se-fs13 { font-size: 15px !important; line-height: 1.8; } /* 실측 15px */
+#preview-content .se-fs14 { font-size: 14px !important; line-height: 1.8; }
+#preview-content .se-fs15 { font-size: 15px !important; line-height: 1.8; }
+#preview-content .se-fs16 { font-size: 16px !important; line-height: 1.8; }
+#preview-content .se-fs17 { font-size: 17px !important; line-height: 1.8; }
+#preview-content .se-fs18 { font-size: 18px !important; line-height: 1.8; }
+#preview-content .se-fs19 { font-size: 19px !important; line-height: 1.8; }
+#preview-content .se-fs20 { font-size: 20px !important; line-height: 1.8; }
+#preview-content .se-fs22 { font-size: 22px !important; line-height: 1.6; }
+#preview-content .se-fs24 { font-size: 24px !important; line-height: 1.6; }
+#preview-content .se-fs28 { font-size: 28px !important; line-height: 1.5; }
+#preview-content .se-fs34 { font-size: 34px !important; line-height: 1.4; }
+#preview-content .se-fs38 { font-size: 38px !important; line-height: 1.4; }
 
 /* ── 실제 콘텐츠 ── */
 /*
