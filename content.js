@@ -679,7 +679,7 @@ async function scanEditorContent() {
 function observeIframe() {
   const doc = getIframeDoc();
   if (!doc) return;
-  new MutationObserver(debouncedUpdate).observe(doc.body, { childList:true, subtree:true, characterData:true });
+  new MutationObserver(debouncedUpdate).observe(doc.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class'] });
 }
 
 function init() {
@@ -692,7 +692,7 @@ function init() {
     if (mutations.every(m => panel.contains(m.target))) return;
     debouncedUpdate();
   });
-  observer.observe(document.body, { childList:true, subtree:true, characterData:true });
+  observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class'] });
 
   setTimeout(() => {
     observeIframe();
