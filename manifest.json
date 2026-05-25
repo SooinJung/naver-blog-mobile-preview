@@ -3,6 +3,11 @@
   "name": "네이버 블로그 모바일 미리보기",
   "version": "1.0",
   "description": "블로그 작성 중 모바일 화면을 실시간으로 미리 봐요",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": ["activeTab"],
   "content_scripts": [
     {
