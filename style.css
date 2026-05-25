@@ -37,6 +37,21 @@
   src: url('https://editor-static.pstatic.net/c/resources/common/fonts/se-nanummaruburi-regular.woff2') format('woff2');
   font-weight: normal; font-style: normal; font-display: swap;
 }
+@font-face {
+  font-family: 'se-nanumdasisijaghae';
+  src: url('https://editor-static.pstatic.net/c/resources/common/fonts/se-nanumdasisijaghae-regular.woff2') format('woff2');
+  font-weight: normal; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'se-nanumbareunhipi';
+  src: url('https://editor-static.pstatic.net/c/resources/common/fonts/se-nanumbareunhipi-regular.woff2') format('woff2');
+  font-weight: normal; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'se-nanumuriddalsongeulssi';
+  src: url('https://editor-static.pstatic.net/c/resources/common/fonts/se-nanumuriddalsongeulssi-regular.woff2') format('woff2');
+  font-weight: normal; font-style: normal; font-display: swap;
+}
 
 /* ── SE4 폰트 클래스 (se.viewer.css 실측값 그대로) ── */
 /* 에디터 DOM에서 가져온 span의 se-ff-* 클래스가 미리보기 패널에서도 올바르게 렌더링되도록 */
