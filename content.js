@@ -501,6 +501,19 @@ function preserveSpaces(html) {
   return html.replace(/ +(<\/[a-zA-Z]+>)/g, (match, tag) => ' '.repeat(match.length - tag.length) + tag);
 }
 
+
+// ── 외부 링크 카드 빌더 ──
+function buildOgLink(url, title, desc, thumb, domain) {
+  const thumbHtml  = thumb  ? `<img src="${thumb}" class="preview-oglink-thumb" loading="eager">` : '';
+  const titleHtml  = title  ? `<div class="preview-oglink-title">${title}</div>`   : '';
+  const descHtml   = desc   ? `<div class="preview-oglink-desc">${desc}</div>`     : '';
+  const domainHtml = domain ? `<div class="preview-oglink-domain">🔗 ${domain}</div>` : '';
+
+  if (!thumbHtml && !titleHtml && !domainHtml) return '';
+
+  return `<a class="preview-oglink" href="${url}" target="_blank" rel="noopener noreferrer">${thumbHtml}<div class="preview-oglink-body">${titleHtml}${descHtml}${domainHtml}</div></a>`;
+}
+
 function getBodyHTML() {
   const doc = getIframeDoc() || document;
   let html = '';
@@ -518,7 +531,70 @@ function getBodyHTML() {
         return;
       }
 
-      // ② se-image(단독) vs se-imageGroup(그룹) 구분 → max-width 여부 결정
+      // ② 구분선: 내용 없는 컴포넌트 → <hr>
+      if (comp.classList.contains('se-horizontalLine')) {
+        html += '<hr class="preview-divider">';
+        return;
+      }
+
+      // ③ 소제목: se-heading 또는 se-section-documentTitle(내용 레벨) 감지
+      if (comp.classList.contains('se-heading')) {
+        comp.querySelectorAll('.se-text-paragraph').forEach(p => {
+          const text = p.innerText.trim();
+          if (text && !isPlaceholder(text)) {
+            html += `<p class="preview-heading">${preserveSpaces(p.innerHTML)}</p>`;
+          }
+        });
+        return;
+      }
+
+      // ④ 인용구
+      if (comp.classList.contains('se-quotation')) {
+        let inner = '';
+        comp.querySelectorAll('.se-text-paragraph').forEach(p => {
+          const text = p.innerText.trim();
+          if (isPlaceholder(text)) return;
+          inner += text === ''
+            ? '<p class="preview-blank">&nbsp;</p>'
+            : `<p>${preserveSpaces(p.innerHTML)}</p>`;
+        });
+        if (inner) html += `<blockquote class="preview-quotation">${inner}</blockquote>`;
+        return;
+      }
+
+      // ⑤ 영상: 썸네일 + 재생 버튼 오버레이
+      if (comp.classList.contains('se-video')) {
+        const imgs = validImgs(comp);
+        if (imgs.length > 0) {
+          const { src, w, h } = imgs[0];
+          const ratioStyle = (w && h) ? ` style="aspect-ratio:${w}/${h}"` : '';
+          html += `<div class="preview-video-wrap"><img src="${src}" class="preview-video-thumb"${ratioStyle} loading="eager"><div class="preview-video-play">▶</div></div>`;
+        }
+        return;
+      }
+
+      // ⑥ 외부 링크 카드 (OG link)
+      if (comp.classList.contains('se-oglink')) {
+        const anchor  = comp.querySelector('a[href]');
+        const url     = anchor?.href || '#';
+        const thumbEl = comp.querySelector('img');
+        const thumb   = thumbEl?.getAttribute('data-lazy-src') || thumbEl?.getAttribute('data-src') || thumbEl?.src || '';
+        const title   = (
+          comp.querySelector('.se-oglink-title, .se-oglink-summary-title')?.innerText ||
+          comp.querySelector('[class*="oglink"][class*="title"]')?.innerText || ''
+        ).trim();
+        const desc = (
+          comp.querySelector('.se-oglink-description, .se-oglink-summary-body')?.innerText ||
+          comp.querySelector('[class*="oglink"][class*="desc"], [class*="oglink"][class*="body"]')?.innerText || ''
+        ).trim();
+        let domain = '';
+        try { if (url !== '#') domain = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+        const card = buildOgLink(url, title, desc, thumb && !thumb.startsWith('data:') ? thumb : null, domain);
+        if (card) html += card;
+        return;
+      }
+
+      // ⑦ se-image(단독) vs se-imageGroup(그룹) 구분 → max-width 여부 결정
       const isStandalone = comp.classList.contains('se-image') && !comp.classList.contains('se-imageGroup');
       const imgs = validImgs(comp);
       if (imgs.length > 0) {
