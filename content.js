@@ -78,7 +78,7 @@ function createPanel() {
 
       <!-- 본문 스크롤 영역 (제목·작성자·본문 전부 iframe 안에서 네이버 CSS로 렌더) -->
       <div id="mobile-preview-body">
-        <iframe id="preview-frame" scrolling="no" title="미리보기"></iframe>
+        <iframe id="preview-frame" scrolling="no" title="미리보기" sandbox="allow-same-origin" allow="autoplay"></iframe>
       </div>
 
       <!-- 좋아요·댓글·공유 -->
@@ -509,12 +509,50 @@ function buildOgLink(url, title, desc, thumb, domain) {
 //  본문을 손으로 흉내 내지 않고, 네이버 뷰어 CSS를 그대로 적용해
 //  "발행된 글과 동일하게" 렌더링한다.
 // ════════════════════════════════════════════════════════════
-const NAVER_VIEWER_CSS = [
+// 네이버 실제 모바일 뷰어 CSS. 버전이 박혀 있어 시간이 지나면 낡거나 사라질 수 있으므로,
+// 실행 시 에디터 페이지에서 현재 버전을 찾아 갱신하고(resolveViewerCSS) 실패 시 이 목록으로 폴백.
+const NAVER_VIEWER_CSS_FALLBACK = [
   'https://ssl.pstatic.net/t.static.blog/nmobile/versioning/lego_w-261743111_https.css',
   'https://ssl.pstatic.net/t.static.blog/nmobile/versioning/lego_view-63655323_https.css',
   'https://ssl.pstatic.net/static/blog/se/css/se_viewer_blog_mobile_v1.43.1.css',
-  'https://editor-static.pstatic.net/v/basic/1.78.0/css/se.viewer.css?v=1.78.0-20260629110340',
+  'https://editor-static.pstatic.net/v/basic/1.78.0/css/se.viewer.css',
 ];
+let viewerCssUrls = NAVER_VIEWER_CSS_FALLBACK.slice();
+
+// 현재 페이지(+에디터 iframe)가 로드한 stylesheet URL 수집
+function collectPageCssHrefs() {
+  const out = [];
+  const scan = (doc) => {
+    try { doc.querySelectorAll('link[rel="stylesheet"]').forEach(l => l.href && out.push(l.href)); } catch (e) {}
+  };
+  scan(document);
+  const ifr = getIframeDoc();
+  if (ifr) scan(ifr);
+  document.querySelectorAll('iframe').forEach(f => { try { if (f.contentDocument) scan(f.contentDocument); } catch (e) {} });
+  return out;
+}
+
+// 고정 버전 대신 현재 페이지에서 최신 CSS URL을 찾아 갱신 (없으면 fallback 유지).
+// 특히 본문 스타일 se.viewer.css 는 로드된 SE 버전(.../v/basic/<버전>/)에서 재구성해 최신화.
+function resolveViewerCSS() {
+  const hrefs = collectPageCssHrefs();
+  const next = NAVER_VIEWER_CSS_FALLBACK.slice();
+  ['lego_w', 'lego_view', 'se_viewer_blog_mobile', 'se.viewer.css'].forEach(pat => {
+    const found = hrefs.find(h => h.includes(pat));
+    if (found) {
+      const i = next.findIndex(u => u.includes(pat));
+      if (i >= 0) next[i] = found;
+    }
+  });
+  const verHref = hrefs.find(h => /editor-static\.pstatic\.net\/v\/basic\/[\d.]+\//.test(h));
+  const vm = verHref && verHref.match(/\/v\/basic\/([\d.]+)\//);
+  if (vm) {
+    const i = next.findIndex(u => u.includes('se.viewer.css'));
+    if (i >= 0) next[i] = `https://editor-static.pstatic.net/v/basic/${vm[1]}/css/se.viewer.css`;
+  }
+  viewerCssUrls = next;
+  try { console.log('[미리보기] 뷰어 CSS 확정:', viewerCssUrls); } catch (e) {}
+}
 
 // 글쓰기 에디터에만 있는 편집 UI(컨트롤 버튼·툴바·플레이스홀더·접근성 텍스트) 제거.
 // 발행 뷰어에는 없는 요소라 미리보기에 그대로 두면 "위치이동/제목/삭제/취소/확인" 같은
@@ -679,9 +717,24 @@ function buildPreviewSrcdoc(sourceDoc, opts) {
     img.setAttribute('loading', 'eager');
   });
 
+  // 움짤(GIF→mp4 변환 영상): 원래 네이버 스크립트가 재생시키는데 미리보기는 스크립트가
+  // 막혀 정지됨 → autoplay 를 붙여 소리 없이 반복 재생(실제 앱처럼 움직임). 실제 동영상은 제외.
+  clone.querySelectorAll('video').forEach(v => {
+    const isGif = (v.className || '').indexOf('_gifmp4') >= 0
+      || (v.className || '').indexOf('custom-se-image-video-resource') >= 0
+      || v.hasAttribute('data-gif-url');
+    if (!isGif) return;
+    v.setAttribute('autoplay', '');
+    v.setAttribute('muted', '');
+    v.muted = true;
+    v.setAttribute('loop', '');
+    v.setAttribute('playsinline', '');
+    v.removeAttribute('controls');
+  });
+
   const inner = clone.outerHTML;
 
-  const links = NAVER_VIEWER_CSS.map(u => `<link rel="stylesheet" href="${u}">`).join('');
+  const links = viewerCssUrls.map(u => `<link rel="stylesheet" href="${u}">`).join('');
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8">${links}` +
     `<style>html,body{margin:0;padding:0;background:#fff}` +
     `#viewTypeSelector{padding-bottom:24px}</style></head>` +
@@ -969,6 +1022,7 @@ function init() {
   observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class'] });
 
   setTimeout(() => {
+    resolveViewerCSS();   // 현재 SE 버전 반영 (에디터 CSS 로드 후)
     observeIframe();
     updatePreview();
     // appbar 블로그 이름만 갱신 (author 닉네임은 applyUserInfo가 담당 — 덮어쓰지 않음)
@@ -976,7 +1030,7 @@ function init() {
     const appbarName = document.querySelector('.appbar-blog-name');
     if (appbarName) appbarName.textContent = info.blogName;
   }, 1500);
-  setTimeout(() => { observeIframe(); updatePreview(); }, 4000);
+  setTimeout(() => { resolveViewerCSS(); observeIframe(); updatePreview(); }, 4000);
 
   // ⟳ 버튼: 기존 글 수정 시 수동으로 전체 이미지 재스캔
   document.getElementById('preview-scan-btn')

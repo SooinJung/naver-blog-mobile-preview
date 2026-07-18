@@ -299,6 +299,9 @@
   display: block;
   background: #fff;
   min-height: 80px;
+  /* 보기 전용: 클릭·호버·스크롤 이벤트를 전부 통과시켜 버튼/링크가 동작하지 않게 함.
+     (스크립트 실행은 iframe sandbox 로 차단) */
+  pointer-events: none;
 }
 
 #preview-content {
