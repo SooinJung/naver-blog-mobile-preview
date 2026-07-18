@@ -76,18 +76,8 @@ function createPanel() {
         </div>
       </div>
 
-      <!-- 본문 스크롤 영역 -->
+      <!-- 본문 스크롤 영역 (제목·작성자·본문 전부 iframe 안에서 네이버 CSS로 렌더) -->
       <div id="mobile-preview-body">
-        <div class="post-year">${yearStr}</div>
-        <div class="post-title" id="preview-post-title">제목을 입력하세요</div>
-        <div class="post-author-row">
-          <div class="author-avatar">✦</div>
-          <div class="author-info">
-            <span class="author-name" id="preview-author-name">${blogName}</span>
-            <span class="author-date">${dateStr}</span>
-          </div>
-          <button class="follow-btn">이웃추가</button>
-        </div>
         <iframe id="preview-frame" scrolling="no" title="미리보기"></iframe>
       </div>
 
@@ -526,6 +516,22 @@ const NAVER_VIEWER_CSS = [
   'https://editor-static.pstatic.net/v/basic/1.78.0/css/se.viewer.css?v=1.78.0-20260629110340',
 ];
 
+// 글쓰기 에디터에만 있는 편집 UI(컨트롤 버튼·툴바·플레이스홀더·접근성 텍스트) 제거.
+// 발행 뷰어에는 없는 요소라 미리보기에 그대로 두면 "위치이동/제목/삭제/취소/확인" 같은
+// 정체불명 텍스트가 보인다.
+function stripEditorUI(root) {
+  const sel = [
+    'button', 'script', 'style', 'noscript',
+    '.se-blind', '.se-placeholder', '.se-placeholderText', '.se-placeholder-text',
+    '.se-controls', '.se-control', '.se-control-panel',
+    '.se-section-control', '.se-component-control',
+    '.se-toolbar', '.se-module-toolbar', '.se-toolbar-container',
+    '.se-drag-handle', '.se-resize-handle', '.se-handle',
+    '.se-tooltip', '.se-help', '.se-guide', '.se-guideline',
+  ].join(',');
+  root.querySelectorAll(sel).forEach(el => { try { el.remove(); } catch (e) {} });
+}
+
 // 에디터 DOM의 클래스명을 발행 뷰어 DOM 형태로 변환 (뷰어 CSS가 인식하도록)
 //   에디터: se-fs16   →   뷰어: se-fs-fs16
 function viewerize(root) {
@@ -536,17 +542,132 @@ function viewerize(root) {
   });
 }
 
+// 미리보기에서 채워 넣을 작성자 정보 (fetch로 갱신됨)
+let previewNick = '';
+let previewProfile = '';
+
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// 실제 네이버 마크업 조각들 (네이버 CSS가 그대로 스타일링)
+function categoryHTML(cat) {
+  return `<div class="blog_category"><a href="#">${escHtml(cat)}</a></div>`;
+}
+function authorAndButtonHTML(author) {
+  return '<div class="blog_authorArea">' +
+      '<a href="#" class="blog_thumbnail"><span class="img">' +
+        (author.profileSrc ? `<img src="${escHtml(author.profileSrc)}" width="36" height="36" alt="프로필">` : '') +
+      '</span></a>' +
+      '<div class="text_area">' +
+        `<div class="blog_author"><a href="#"><strong class="ell">${escHtml(author.nick)}</strong></a></div>` +
+        `<p class="blog_date">${escHtml(author.date)}</p>` +
+      '</div>' +
+    '</div>' +
+    '<div class="blog_btnArea"><a href="#" class="btn_buddyadd"><span class="sp"></span> 이웃추가</a></div>';
+}
+// 에디터에 제목 컴포넌트가 아예 없을 때 통째로 구성
+function buildFullDocumentTitleHTML(author) {
+  return '<div class="se-component se-documentTitle se-l-default">' +
+    '<div class="se-component-content">' +
+    '<div class="se-section se-section-documentTitle se-l-default se-section-align-left">' +
+      (author.category ? categoryHTML(author.category) : '') +
+      '<div class="se-module se-module-text se-title-text">' +
+        '<p class="se-text-paragraph se-text-paragraph-align-">' +
+          `<span class="se-fs- se-ff-nanumgothic">${escHtml(author.title || '')}</span>` +
+        '</p>' +
+      '</div>' +
+      authorAndButtonHTML(author) +
+    '</div></div></div>';
+}
+
+// se-documentTitle 에 카테고리·작성자 영역이 없으면(=글쓰기 에디터) 네이버 마크업으로 채워 넣음.
+// 발행된 글(비교 도구)은 이미 있으므로 건드리지 않음.
+function injectDocumentTitleExtras(clone, author) {
+  if (!author) return;
+  const dt = clone.querySelector('.se-documentTitle');
+  if (!dt) {
+    // 제목 컴포넌트 자체가 없으면 통째로 구성해 맨 앞에 삽입
+    const wrap = clone.ownerDocument.createElement('div');
+    wrap.innerHTML = buildFullDocumentTitleHTML(author);
+    if (wrap.firstElementChild) clone.insertBefore(wrap.firstElementChild, clone.firstChild);
+    return;
+  }
+  const section = dt.querySelector('.se-section-documentTitle')
+    || dt.querySelector('.se-component-content') || dt;
+
+  // 카테고리 (제목 앞)
+  if (author.category && !section.querySelector('.blog_category')) {
+    const titleMod = section.querySelector('.se-title-text');
+    if (titleMod) titleMod.insertAdjacentHTML('beforebegin', categoryHTML(author.category));
+    else section.insertAdjacentHTML('afterbegin', categoryHTML(author.category));
+  }
+
+  // 작성자 영역 (프로필·닉네임·날짜) + 이웃추가 버튼
+  if (!section.querySelector('.blog_authorArea')) {
+    section.insertAdjacentHTML('beforeend', authorAndButtonHTML(author));
+  }
+}
+
+// 실제로 글 컴포넌트가 들어있는 문서를 고른다 (에디터 iframe / 메인 문서 중).
+function pickSourceDoc(preferred) {
+  const cands = [preferred, getIframeDoc(), document].filter(Boolean);
+  for (const d of cands) {
+    try {
+      if (d.querySelector && (d.querySelector('.se-viewer') || d.querySelector('.se-component'))) return d;
+    } catch (e) {}
+  }
+  return preferred || document;
+}
+
 // 미리보기 iframe 안에 넣을 문서 생성:
-//   실제 네이버 뷰어 CSS + (제목 제외) 본문 컴포넌트 → 네이버가 그리던 그대로 렌더
+//   실제 네이버 뷰어 CSS + 제목·작성자·본문 → 네이버가 그리던 그대로 렌더
 function buildPreviewSrcdoc(sourceDoc, opts) {
   opts = opts || {};
-  const src = sourceDoc || getIframeDoc() || document;
-  const base = src.querySelector('.se-main-container') || src.querySelector('.se-viewer');
-  if (!base) return null;
-  const clone = base.cloneNode(true);
+  const src = pickSourceDoc(sourceDoc);
 
-  // 제목(se-documentTitle)은 우리 헤더가 따로 그림 → 본문에서 제거
-  clone.querySelectorAll('.se-documentTitle').forEach(el => el.remove());
+  // se-viewer 통째로 복제 (제목 se-documentTitle 은 main-container 밖 형제라 반드시 포함).
+  // 에디터엔 se-viewer 가 없으므로 제목 + 본문(se-component)을 se-viewer 로 감싸 구성.
+  let clone;
+  const viewer = src.querySelector('.se-viewer');
+  if (viewer) {
+    clone = viewer.cloneNode(true);
+  } else {
+    clone = src.createElement('div');
+    clone.className = 'se-viewer se-theme-default';
+    const dt = src.querySelector('.se-documentTitle');
+    const mc = src.querySelector('.se-main-container');
+    // 제목은 main-container 밖에 있을 때만 따로 추가 (중복 방지)
+    if (dt && (!mc || !mc.contains(dt))) clone.appendChild(dt.cloneNode(true));
+    if (mc) {
+      clone.appendChild(mc.cloneNode(true));
+    } else {
+      // 컨테이너가 없으면 se-component 들을 직접 모아 감쌈 (에디터 폴백)
+      const mcNew = src.createElement('div');
+      mcNew.className = 'se-main-container';
+      let count = 0;
+      src.querySelectorAll('.se-component').forEach(c => {
+        if (dt && c.classList && c.classList.contains('se-documentTitle') && clone.contains && clone.querySelector('.se-documentTitle')) return;
+        mcNew.appendChild(c.cloneNode(true));
+        count++;
+      });
+      clone.appendChild(mcNew);
+      if (count === 0 && !clone.querySelector('.se-component') && !opts.author) return null;
+    }
+  }
+
+  // 에디터 전용 편집 UI 제거 (작성자 주입 전에 실행)
+  stripEditorUI(clone);
+
+  // 에디터의 제목 컴포넌트는 표지사진·위치이동·삭제 등 편집 UI가 잔뜩 붙어있으므로
+  // 통째로 제거하고, 아래 injectDocumentTitleExtras 가 제목/작성자 데이터로 깨끗하게 새로 구성.
+  if (opts.isEditor) {
+    clone.querySelectorAll('.se-documentTitle').forEach(el => el.remove());
+  }
+
+  // 제목/작성자(se-documentTitle)를 iframe 안에서 네이버 CSS로 렌더.
+  injectDocumentTitleExtras(clone, opts.author);
 
   // 에디터 → 뷰어 클래스명 보정
   if (opts.isEditor) viewerize(clone);
@@ -558,9 +679,7 @@ function buildPreviewSrcdoc(sourceDoc, opts) {
     img.setAttribute('loading', 'eager');
   });
 
-  const inner = clone.classList && clone.classList.contains('se-viewer')
-    ? clone.outerHTML
-    : `<div class="se-viewer se-theme-default"><div class="se-main-container">${clone.innerHTML}</div></div>`;
+  const inner = clone.outerHTML;
 
   const links = NAVER_VIEWER_CSS.map(u => `<link rel="stylesheet" href="${u}">`).join('');
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8">${links}` +
@@ -689,32 +808,35 @@ function getBodyHTML(docArg) {
 }
 
 function updatePreview() {
-  // 카테고리/연도 업데이트
-  const yearEl = document.querySelector('.post-year');
-  if (yearEl) {
-    const cat = getCategory();
-    if (cat) yearEl.textContent = cat;
-  }
-
-  // 제목 업데이트 (iframe 준비 후 추출)
-  const titleEl = document.getElementById('preview-post-title');
-  if (titleEl) {
-    const title = getTitle();
-    if (title) {
-      titleEl.textContent = title;
-      titleEl.style.color = '#111';
-    } else {
-      titleEl.textContent = '제목을 입력하세요';
-      titleEl.style.color = '#bbb';
-    }
-  }
-  // 본문 업데이트: 네이버 실제 CSS를 iframe에 적용해 발행 글과 동일하게 렌더
+  // 제목·작성자·본문 전부 iframe 안에서 네이버 실제 CSS로 렌더.
+  // 작성자 영역은 발행 전 에디터엔 없으므로 우리가 가진 데이터로 채워 넣는다.
   const frame = document.getElementById('preview-frame');
   if (!frame) return;
-  const srcdoc = buildPreviewSrcdoc(getIframeDoc() || document, { isEditor: true });
+  const today = new Date();
+  const author = {
+    title: '', category: '',
+    nick: previewNick || '',
+    date: `${today.getFullYear()}. ${today.getMonth() + 1}. ${today.getDate()}.`,
+    profileSrc: previewProfile || '',
+  };
+  try { author.title = getTitle() || ''; author.category = getCategory() || ''; } catch (e) {}
+
+  let srcdoc = null;
+  try {
+    srcdoc = buildPreviewSrcdoc(getIframeDoc() || document, { isEditor: true, author });
+  } catch (e) { console.log('[미리보기] 렌더 오류:', e); }
+
+  sizePreviewFrame(frame);
   if (srcdoc) {
-    sizePreviewFrame(frame);
     frame.srcdoc = srcdoc;
+  } else {
+    // 내용을 못 찾음 → 화면에 진단 정보 표시 (콘솔 안 봐도 원인 파악 가능)
+    const d = pickSourceDoc(getIframeDoc() || document);
+    frame.srcdoc = '<body style="font:13px sans-serif;padding:16px;color:#c0392b;line-height:1.7">'
+      + '⚠️ 미리보기 내용을 못 찾았어요.<br>'
+      + 'se-component 수: ' + d.querySelectorAll('.se-component').length + '<br>'
+      + 'main-container: ' + !!d.querySelector('.se-main-container') + '<br>'
+      + 'se-viewer: ' + !!d.querySelector('.se-viewer') + '</body>';
   }
 }
 
@@ -860,22 +982,11 @@ function init() {
   document.getElementById('preview-scan-btn')
     ?.addEventListener('click', () => scanEditorContent());
 
-  // ── 닉네임 반영 공통 함수 ──
+  // ── 작성자 정보 저장 후 미리보기 갱신 (헤더는 iframe 안에서 그림) ──
   function applyUserInfo(nickname, profileImg) {
-    if (nickname) {
-      const authorEl = document.getElementById('preview-author-name');
-      if (authorEl) authorEl.textContent = nickname;
-    }
-    if (profileImg) {
-      const avatarEl = document.querySelector('.author-avatar');
-      if (avatarEl) {
-        const img = document.createElement('img');
-        img.src = profileImg;
-        img.alt = nickname || '프로필';
-        avatarEl.textContent = '';   // ✦ 기호 제거
-        avatarEl.appendChild(img);
-      }
-    }
+    if (nickname) previewNick = nickname;
+    if (profileImg) previewProfile = profileImg;
+    updatePreview();
   }
 
   // Step 1: 현재 페이지 script 태그 즉시 스캔 (네트워크 요청 없음)

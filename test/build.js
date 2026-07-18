@@ -186,42 +186,6 @@ ${templates}
     document.getElementById('mobile-preview-panel')
   );
 
-  // 발행된 모바일 글(뷰어)과 글쓰기 에디터는 일부 클래스명이 다르다.
-  // 우리 익스텐션은 "에디터"에서 돌아가므로, 뷰어 DOM 을 에디터 DOM 형태로 맞춰준다.
-  // (알려진 차이를 여기에 계속 추가하면 도구 정확도가 올라감)
-  function editorize(doc) {
-    // 폰트 크기: 뷰어 se-fs-fs16  →  에디터 se-fs16
-    doc.querySelectorAll('[class*="se-fs-fs"]').forEach((el) => {
-      el.className = el.className.replace(/\\bse-fs-fs(\\d+)\\b/g, 'se-fs$1');
-    });
-  }
-
-  // 발행글의 se-documentTitle 에서 진짜 제목/작성자/날짜/카테고리/프로필을 뽑아
-  // 우리 미리보기 헤더(#preview-post-title 등)에 채워 넣는다 (껍데기 플레이스홀더 제거).
-  function feedHeader(dt) {
-    const txt = (el) => (el && el.textContent || '').replace(/\\s+/g, ' ').trim();
-    const pick = (sel) => (dt ? dt.querySelector(sel) : null);
-
-    const title = txt(pick('.se-title-text')) || txt(pick('.se-documentTitle-text')) ||
-                  txt(pick('.se-text-paragraph'));
-    const nick  = txt(pick('.blog_author .nick')) || txt(pick('.blog_author strong')) ||
-                  txt(pick('.nick'));
-    const date  = txt(pick('.blog_date'));
-    const cat   = txt(pick('.blog_category'));
-    const profEl = pick('.blog_thumbnail img') || pick('.blog_thumbnail_img');
-    const profSrc = profEl && (profEl.getAttribute('data-lazy-src') || profEl.getAttribute('src'));
-
-    const set = (sel, val) => { const el = document.querySelector(sel); if (el && val) el.textContent = val; };
-    if (title) { const t = document.getElementById('preview-post-title'); if (t) { t.textContent = title; t.style.color = '#111'; } }
-    set('#preview-author-name', nick);
-    set('.author-date', date);
-    set('.post-year', cat);
-    if (profSrc) {
-      const av = document.querySelector('.author-avatar');
-      if (av) { av.innerHTML = ''; const im = new Image(); im.src = profSrc; im.alt = nick || ''; av.appendChild(im); }
-    }
-  }
-
   function render(sampleId) {
     const raw = document.getElementById(sampleId).textContent;
 
@@ -234,14 +198,9 @@ ${templates}
       '#viewTypeSelector{padding-bottom:40px}</style></head><body>' +
       WRAP_OPEN + raw + WRAP_CLOSE + '</body></html>';
 
-    // ── 오른쪽: 같은 원본을 네이버 실제 CSS iframe 으로 렌더 (에디터와 동일한 새 방식) ──
+    // ── 오른쪽: 네이버 실제 CSS iframe (제목·작성자·본문 전부, 발행 뷰어 DOM 그대로) ──
+    // 발행글엔 작성자 영역이 이미 있으므로 그대로 렌더 → 정답과 동일. viewerize 불필요.
     const ourDoc = new DOMParser().parseFromString(raw, 'text/html');
-
-    // 제목/작성자는 우리 헤더에 주입 (본문 iframe 에서는 se-documentTitle 제외)
-    const dt = ourDoc.querySelector('.se-documentTitle');
-    feedHeader(dt);
-
-    // 하네스 입력은 이미 발행 뷰어 DOM 이므로 viewerize 불필요 (isEditor:false)
     const frame2 = document.getElementById('preview-frame');
     const srcdoc = buildPreviewSrcdoc(ourDoc, { isEditor: false });
     if (frame2 && srcdoc) { sizePreviewFrame(frame2); frame2.srcdoc = srcdoc; }
