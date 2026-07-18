@@ -4,3 +4,10 @@ package-lock.json
 # 문서 & 레퍼런스 (개발 참고용, 배포 불필요)
 docs/
 reference/
+
+# Claude Code 로컬 설정
+.claude/
+
+# 비교 도구가 긁어온 실제 블로그 원본 & 생성물 (제3자 콘텐츠·대용량, 배포 불필요)
+test/raw/
+test/preview-test.html

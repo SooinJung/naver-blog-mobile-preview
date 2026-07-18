@@ -88,7 +88,7 @@ function createPanel() {
           </div>
           <button class="follow-btn">이웃추가</button>
         </div>
-        <div id="preview-content">글을 쓰기 시작하면 여기에 미리보기가 나타나요!</div>
+        <iframe id="preview-frame" scrolling="no" title="미리보기"></iframe>
       </div>
 
       <!-- 좋아요·댓글·공유 -->
@@ -514,8 +514,75 @@ function buildOgLink(url, title, desc, thumb, domain) {
   return `<a class="preview-oglink" href="${url}" target="_blank" rel="noopener noreferrer">${thumbHtml}<div class="preview-oglink-body">${titleHtml}${descHtml}${domainHtml}</div></a>`;
 }
 
-function getBodyHTML() {
-  const doc = getIframeDoc() || document;
+// ════════════════════════════════════════════════════════════
+//  네이버 실제 CSS 재사용 렌더러 (iframe 방식)
+//  본문을 손으로 흉내 내지 않고, 네이버 뷰어 CSS를 그대로 적용해
+//  "발행된 글과 동일하게" 렌더링한다.
+// ════════════════════════════════════════════════════════════
+const NAVER_VIEWER_CSS = [
+  'https://ssl.pstatic.net/t.static.blog/nmobile/versioning/lego_w-261743111_https.css',
+  'https://ssl.pstatic.net/t.static.blog/nmobile/versioning/lego_view-63655323_https.css',
+  'https://ssl.pstatic.net/static/blog/se/css/se_viewer_blog_mobile_v1.43.1.css',
+  'https://editor-static.pstatic.net/v/basic/1.78.0/css/se.viewer.css?v=1.78.0-20260629110340',
+];
+
+// 에디터 DOM의 클래스명을 발행 뷰어 DOM 형태로 변환 (뷰어 CSS가 인식하도록)
+//   에디터: se-fs16   →   뷰어: se-fs-fs16
+function viewerize(root) {
+  root.querySelectorAll('[class*="se-fs"]').forEach(el => {
+    if (typeof el.className === 'string' && /\bse-fs\d+\b/.test(el.className)) {
+      el.className = el.className.replace(/\bse-fs(\d+)\b/g, 'se-fs-fs$1');
+    }
+  });
+}
+
+// 미리보기 iframe 안에 넣을 문서 생성:
+//   실제 네이버 뷰어 CSS + (제목 제외) 본문 컴포넌트 → 네이버가 그리던 그대로 렌더
+function buildPreviewSrcdoc(sourceDoc, opts) {
+  opts = opts || {};
+  const src = sourceDoc || getIframeDoc() || document;
+  const base = src.querySelector('.se-main-container') || src.querySelector('.se-viewer');
+  if (!base) return null;
+  const clone = base.cloneNode(true);
+
+  // 제목(se-documentTitle)은 우리 헤더가 따로 그림 → 본문에서 제거
+  clone.querySelectorAll('.se-documentTitle').forEach(el => el.remove());
+
+  // 에디터 → 뷰어 클래스명 보정
+  if (opts.isEditor) viewerize(clone);
+
+  // 지연로딩 이미지: 실제 이미지로 승격
+  clone.querySelectorAll('img').forEach(img => {
+    const lazy = img.getAttribute('data-lazy-src') || img.getAttribute('data-src');
+    if (lazy) img.setAttribute('src', lazy);
+    img.setAttribute('loading', 'eager');
+  });
+
+  const inner = clone.classList && clone.classList.contains('se-viewer')
+    ? clone.outerHTML
+    : `<div class="se-viewer se-theme-default"><div class="se-main-container">${clone.innerHTML}</div></div>`;
+
+  const links = NAVER_VIEWER_CSS.map(u => `<link rel="stylesheet" href="${u}">`).join('');
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8">${links}` +
+    `<style>html,body{margin:0;padding:0;background:#fff}` +
+    `#viewTypeSelector{padding-bottom:24px}</style></head>` +
+    `<body><div class="post_ct wrap_rabbit" id="viewTypeSelector">${inner}</div></body></html>`;
+}
+
+// iframe 높이를 내부 콘텐츠에 맞춰 늘려 부모(#mobile-preview-body)가 통째로 스크롤되게 함
+function sizePreviewFrame(frame) {
+  const resize = () => {
+    try {
+      const d = frame.contentDocument;
+      if (d && d.documentElement) frame.style.height = d.documentElement.scrollHeight + 'px';
+    } catch (e) {}
+  };
+  frame.onload = () => { resize(); setTimeout(resize, 300); setTimeout(resize, 1200); };
+}
+
+function getBodyHTML(docArg) {
+  // docArg: 오프라인 테스트 하네스에서 임의 문서를 넘길 수 있게 허용 (기본은 기존 동작)
+  const doc = docArg || getIframeDoc() || document;
   let html = '';
   const components = doc.querySelectorAll('.se-component');
 
@@ -641,11 +708,14 @@ function updatePreview() {
       titleEl.style.color = '#bbb';
     }
   }
-  // 본문 업데이트
-  const contentEl = document.getElementById('preview-content');
-  if (!contentEl) return;
-  const html = getBodyHTML();
-  if (html) { contentEl.innerHTML = html; initCarousels(); }
+  // 본문 업데이트: 네이버 실제 CSS를 iframe에 적용해 발행 글과 동일하게 렌더
+  const frame = document.getElementById('preview-frame');
+  if (!frame) return;
+  const srcdoc = buildPreviewSrcdoc(getIframeDoc() || document, { isEditor: true });
+  if (srcdoc) {
+    sizePreviewFrame(frame);
+    frame.srcdoc = srcdoc;
+  }
 }
 
 const debouncedUpdate = debounce(updatePreview, 300);
