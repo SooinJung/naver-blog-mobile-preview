@@ -1,22 +1,43 @@
+// width·height = 기기 화면 전체의 CSS 픽셀 크기 (상태바·하단바 포함)
+// statusBar   = 시간·배터리 줄 높이. 미리보기는 이 줄을 그리지 않으므로 화면 높이에서 뺀다
+//               (본문이 보이는 양은 실제 폰과 같게 유지). 54 = iPhone 16 실측, 나머지는 근사값.
 const DEVICES = [
-  { name: 'iPhone 16',          width: 393 },
-  { name: 'iPhone 16 Plus',     width: 430 },
-  { name: 'iPhone 16 Pro',      width: 393 },
-  { name: 'iPhone 16 Pro Max',  width: 440 },
-  { name: 'iPhone 15 Pro Max',  width: 430 },
-  { name: 'iPhone 15 / 14 Pro', width: 393 },
-  { name: 'iPhone SE',          width: 375 },
-  { name: 'Galaxy S24',         width: 360 },
-  { name: 'Galaxy S24+',        width: 412 },
-  { name: 'Pixel 8',            width: 412 },
+  { name: 'iPhone 16',          width: 393, height: 852, statusBar: 54 },
+  { name: 'iPhone 16 Plus',     width: 430, height: 932, statusBar: 54 },
+  { name: 'iPhone 16 Pro',      width: 402, height: 874, statusBar: 54 },
+  { name: 'iPhone 16 Pro Max',  width: 440, height: 956, statusBar: 54 },
+  { name: 'iPhone 15 Pro Max',  width: 430, height: 932, statusBar: 54 },
+  { name: 'iPhone 15 / 14 Pro', width: 393, height: 852, statusBar: 54 },
+  { name: 'iPhone SE',          width: 375, height: 667, statusBar: 20 },
+  { name: 'Galaxy S24',         width: 360, height: 780, statusBar: 24 },
+  { name: 'Galaxy S24+',        width: 384, height: 832, statusBar: 24 },
+  { name: 'Pixel 8',            width: 412, height: 915, statusBar: 24 },
 ];
 
-function createPanel() {
-  const savedWidth  = localStorage.getItem('mobilePreviewWidth')  || '393';
-  const savedDevice = localStorage.getItem('mobilePreviewDevice') || 'iPhone 16';
+function getSavedDevice() {
+  const name = localStorage.getItem('mobilePreviewDevice');
+  return DEVICES.find(d => d.name === name) || DEVICES[0];
+}
 
+// 패널을 기기 화면 크기(폭·높이)에 맞춘다.
+// 브라우저 창이 기기보다 낮으면 레이아웃(줄바꿈 등)은 그대로 두고 통째로 축소해서 보여준다.
+function applyDevice(panel, device) {
+  panel.style.width = device.width + 'px';
+  panel.querySelector('#phone-screen').style.height = (device.height - device.statusBar) + 'px';
+  if (panel.style.display === 'none') return;   // 닫힌 상태에선 크기 측정 불가 → 열 때 다시 호출
+  const avail = window.innerHeight - panel.offsetTop - 20;
+  const scale = Math.min(1, avail / panel.offsetHeight);   // offsetHeight 는 transform 영향 없음
+  panel.style.transform = scale < 1 ? `scale(${scale})` : '';
+}
+
+function createPanel() {
+  // option value 는 기기 이름 (폭이 같은 기기가 여럿이라 폭으로는 구분 불가)
+  let device = getSavedDevice();
   const deviceOptions = DEVICES.map(d =>
-    `<option value="${d.width}" ${d.name === savedDevice ? 'selected' : ''}>${d.name}</option>`
+    `<option value="${d.name}" ${d === device ? 'selected' : ''}>${d.name}</option>`
+  ).join('');
+  const adOptions = AD_MODES.map(m =>
+    `<option value="${m.value}" ${m.value === adModeSetting ? 'selected' : ''}>${m.label}</option>`
   ).join('');
 
   // 블로그 정보 동적으로 가져오기 (getBlogInfo는 아직 getIframeDoc 전에 호출되므로 기본값만)
@@ -24,18 +45,19 @@ function createPanel() {
   const dateStr = `${today.getFullYear()}. ${today.getMonth()+1}. ${today.getDate()}.`;
   const yearStr = String(today.getFullYear());
   // 블로그 이름은 document.title에서 바로 뽑을 수 있음
-  let blogName = '내 블로그';
+  // 못 찾으면 비워 두고 fetchBlogUserInfo 결과로 채움 (엉뚱한 '내 블로그' 표시 방지)
+  let blogName = '';
   const titleMatch = document.title.match(/^(.+?)\s*[:：]\s*네이버 블로그/);
-  if (titleMatch) blogName = titleMatch[1].trim();
+  if (titleMatch) blogName = escHtml(titleMatch[1].trim());
 
   const panel = document.createElement('div');
   panel.id = 'mobile-preview-panel';
-  panel.style.width = savedWidth + 'px';
   panel.innerHTML = `
     <!-- 컨트롤 바 -->
     <div id="mobile-preview-header">
       <span id="mobile-preview-title">📱 미리보기</span>
       <select id="mobile-preview-device">${deviceOptions}</select>
+      <select id="mobile-preview-ad" title="본문 광고 자리 (네이버 애드포스트)">${adOptions}</select>
       <button id="preview-scan-btn" title="전체 이미지 재스캔">⟳</button>
       <button id="mobile-preview-close">✕</button>
     </div>
@@ -43,35 +65,29 @@ function createPanel() {
     <!-- 폰 화면 -->
     <div id="phone-screen">
 
-      <!-- 상태바 -->
-      <div class="phone-status-bar">
-        <span id="phone-clock"></span>
-        <div class="phone-status-right">
-          <svg width="17" height="12" viewBox="0 0 17 12" fill="white">
-            <rect x="0"  y="4" width="3" height="8" rx="0.5"/>
-            <rect x="4"  y="2.5" width="3" height="9.5" rx="0.5"/>
-            <rect x="8"  y="1" width="3" height="11" rx="0.5"/>
-            <rect x="12" y="0" width="3" height="12" rx="0.5"/>
-          </svg>
-          <span class="phone-network">5G</span>
-          <svg width="25" height="12" viewBox="0 0 25 12" fill="none">
-            <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="white" stroke-opacity="0.35"/>
-            <rect x="2" y="2" width="16" height="8" rx="2" fill="white"/>
-            <path d="M23 4v4a2 2 0 000-4z" fill="white" fill-opacity="0.4"/>
-          </svg>
-        </div>
+      <!-- 네이버 앱 인앱 브라우저 주소줄 -->
+      <div class="phone-url-bar">
+        <span>blog.naver.com</span>
+        <svg class="phone-url-close" width="9" height="9" viewBox="0 0 9 9" stroke="#222" stroke-width="1.2"><path d="M.5.5l8 8M8.5.5l-8 8"/></svg>
       </div>
 
-      <!-- 네이버 블로그 앱 헤더 -->
+      <!-- 네이버 블로그 모바일 헤더 (로고 · 가운데 목록+블로그명 · 우측 아이콘) -->
       <div class="naver-blog-appbar">
         <span class="appbar-blog-logo">blog</span>
-        <div class="appbar-right">
-          <span class="appbar-blog-name">${blogName}</span>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        <div class="appbar-center">
+          <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="#111" stroke-width="1.6">
+            <rect x="1" y="1" width="17" height="17" rx="3"/>
+            <path d="M5 6h1M5 9.5h1M5 13h1M8 6h6M8 9.5h6M8 13h6" stroke-linecap="round"/>
           </svg>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          <span class="appbar-blog-name">${blogName}</span>
+        </div>
+        <div class="appbar-right">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#111" stroke-width="1.7" stroke-linecap="round">
+            <path d="M9 3H5a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h11a3 3 0 0 0 3-3v-5"/>
+            <circle cx="15" cy="6.5" r="4.5"/><path d="M18.3 9.8l2.7 2.7"/>
+          </svg>
+          <svg width="18" height="16" viewBox="0 0 18 16" stroke="#111" stroke-width="1.7" stroke-linecap="round">
+            <path d="M1 1.5h16M1 8h16M1 14.5h16"/>
           </svg>
         </div>
       </div>
@@ -81,39 +97,40 @@ function createPanel() {
         <iframe id="preview-frame" scrolling="no" title="미리보기" sandbox="allow-same-origin" allow="autoplay"></iframe>
       </div>
 
-      <!-- 좋아요·댓글·공유 -->
+      <!-- 공감·댓글·공유 (실측 51px) -->
       <div class="post-action-bar">
-        <span class="action-item">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-          </svg>
-          <span>6</span>
+        <svg width="26" height="22" viewBox="0 0 26 22" fill="none" stroke="#222" stroke-width="1.7" stroke-linejoin="round">
+          <path d="M13 21S1 13.6 1 6.8A5.8 5.8 0 0 1 13 4a5.8 5.8 0 0 1 12 2.8C25 13.6 13 21 13 21z"/>
+        </svg>
+        <span class="action-like">
+          <svg width="15" height="13" viewBox="0 0 26 22" fill="#f25a7c"><path d="M13 21S1 13.6 1 6.8A5.8 5.8 0 0 1 13 4a5.8 5.8 0 0 1 12 2.8C25 13.6 13 21 13 21z"/></svg>
+          <span>10</span>
         </span>
-        <span class="action-item">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-          <span>1</span>
-        </span>
-        <span class="action-item">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-          </svg>
-        </span>
+        <svg class="action-comment" width="23" height="23" viewBox="0 0 23 23" fill="none" stroke="#222" stroke-width="1.7">
+          <path d="M11.5 1.5a10 10 0 0 1 0 20 10 10 0 0 1-4.6-1.1L1.8 21.5l1.2-4.9A10 10 0 0 1 11.5 1.5z" stroke-linejoin="round"/>
+          <circle cx="7" cy="11.5" r="1.1" fill="#222" stroke="none"/><circle cx="11.5" cy="11.5" r="1.1" fill="#222" stroke="none"/><circle cx="16" cy="11.5" r="1.1" fill="#222" stroke="none"/>
+        </svg>
+        <svg class="action-send" width="23" height="22" viewBox="0 0 23 22" fill="none" stroke="#222" stroke-width="1.7" stroke-linejoin="round">
+          <path d="M22 1L1 8.5l9 3.5 3.5 9z M22 1L10 12"/>
+        </svg>
       </div>
 
-      <!-- 앱 하단 탭바 -->
+      <!-- 네이버 앱 하단 탭바 (실측 82px: 아이콘 20px + 홈 인디케이터 여백) -->
       <div class="app-nav-bar">
-        <span class="nav-naver">N</span>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-4"/></svg>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <svg width="23" height="23" viewBox="0 0 23 23" fill="none" stroke="#111" stroke-width="1.9">
+          <rect x="1" y="1" width="21" height="21" rx="5"/><path d="M7.5 16.5v-10l8 10v-10" stroke-linejoin="round"/>
+        </svg>
+        <svg width="12" height="19" viewBox="0 0 12 19" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 1.5l-9 8 9 8"/></svg>
+        <svg width="12" height="19" viewBox="0 0 12 19" fill="none" stroke="#c4c4c4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 1.5l9 8-9 8"/></svg>
+        <svg width="21" height="21" viewBox="0 0 21 21" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="9" r="7.8"/><path d="M15 15l5 5"/></svg>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 10a8.5 8.5 0 1 1-2.5-6"/><path d="M17 1v4.5h-4.5"/></svg>
+        <svg width="22" height="14" viewBox="0 0 22 14" stroke="#111" stroke-width="2" stroke-linecap="round"><path d="M1 1h20M1 7h20M1 13h20"/></svg>
       </div>
     </div>
   `;
   document.body.appendChild(panel);
+  applyDevice(panel, device);
+  window.addEventListener('resize', () => applyDevice(panel, device));
 
   // 플로팅 재열기 버튼
   const toggle = document.createElement('button');
@@ -128,23 +145,18 @@ function createPanel() {
   toggle.addEventListener('click', () => {
     panel.style.display = 'flex';
     toggle.style.display = 'none';
+    applyDevice(panel, device);
+  });
+  document.getElementById('mobile-preview-ad').addEventListener('change', (e) => {
+    adModeSetting = e.target.value;
+    try { localStorage.setItem('mobilePreviewAd', adModeSetting); } catch (err) {}
+    updatePreview();
   });
   document.getElementById('mobile-preview-device').addEventListener('change', (e) => {
-    const selected = DEVICES.find(d => d.width === parseInt(e.target.value));
-    panel.style.width = e.target.value + 'px';
-    localStorage.setItem('mobilePreviewWidth', e.target.value);
-    if (selected) localStorage.setItem('mobilePreviewDevice', selected.name);
+    device = DEVICES.find(d => d.name === e.target.value) || DEVICES[0];
+    localStorage.setItem('mobilePreviewDevice', device.name);
+    applyDevice(panel, device);
   });
-
-  // 시계
-  function updateClock() {
-    const el = document.getElementById('phone-clock');
-    if (!el) return;
-    const now = new Date();
-    el.textContent = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
-  }
-  updateClock();
-  setInterval(updateClock, 10000);
 
   return panel;
 }
@@ -263,7 +275,11 @@ async function fetchBlogUserInfo(blogId) {
       profileImg = candidate;
     }
 
-    return { nickname, profileImg };
+    // 블로그 이름: <title> = "블로그 이름 : 네이버 블로그"
+    const tm = (doc.title || '').match(/^(.+?)\s*[:：]\s*네이버 블로그/);
+    const blogName = tm ? tm[1].trim() : null;
+
+    return { nickname, profileImg, blogName };
   }
 
   // 한 URL을 fetch → frameset이면 mainFrame까지 따라가기
@@ -297,7 +313,7 @@ async function fetchBlogUserInfo(blogId) {
       const doc = await fetchAndParse(url);
       if (!doc) continue;
       const result = extractFromDoc(doc);
-      if (result.nickname || result.profileImg) {
+      if (result.nickname || result.profileImg || result.blogName) {
         console.log('[미리보기] fetch 결과 →', result);
         return result;
       }
@@ -351,14 +367,22 @@ function debounce(fn, delay) {
   return function () { clearTimeout(timer); timer = setTimeout(fn, delay); };
 }
 
-function getIframeDoc() {
+// 접근 가능한 iframe 문서들 (미리보기 자체 iframe 은 제외 —
+// 자기 출력을 감시하면 갱신 → 변경 → 갱신 무한 루프가 된다).
+function getContentIframeDocs() {
+  const out = [];
   for (const iframe of document.querySelectorAll('iframe')) {
+    if (iframe.id === 'preview-frame') continue;
     try {
       const doc = iframe.contentDocument || iframe.contentWindow.document;
-      if (doc && doc.body) return doc;
+      if (doc && doc.body) out.push(doc);
     } catch (e) {}
   }
-  return null;
+  return out;
+}
+
+function getIframeDoc() {
+  return getContentIframeDocs()[0] || null;
 }
 
 // 제목 요소 캐시 (body 추출 시 제외하기 위해)
@@ -554,6 +578,59 @@ function resolveViewerCSS() {
   try { console.log('[미리보기] 뷰어 CSS 확정:', viewerCssUrls); } catch (e) {}
 }
 
+// 동영상(se-video)·외부 임베드(se-oembed): 실제 뷰어에선 네이버 플레이어 스크립트가
+// __se_module_data(vid·썸네일)를 읽어 플레이어를 그린다. 미리보기 iframe 은 스크립트가 막혀 있어
+// 플레이어(와 그 안의 iframe)가 "자바스크립트를 사용 설정하세요" 오류를 띄움
+// → 재생 전 화면(썸네일 + 재생 버튼)으로 바꿔 넣는다. 보기 전용이라 재생은 원래 불가.
+// script 를 읽어야 하므로 stripEditorUI 보다 먼저 호출할 것.
+function staticizeVideos(root) {
+  root.querySelectorAll('.se-component.se-video, .se-component.se-oembed').forEach(comp => {
+    let data = {};
+    const dataEl = comp.querySelector('script.__se_module_data, [data-module]');
+    try { data = JSON.parse(dataEl.getAttribute('data-module')).data || {}; } catch (e) {}
+
+    let thumb = data.thumbnail || data.thumbnailUrl || data.thumbnail_url || '';
+    if (!thumb) {
+      const img = comp.querySelector('img[src]:not([src^="data:"])');
+      const poster = comp.querySelector('video[poster]');
+      const bg = comp.querySelector('[style*="background-image"]');
+      const bgm = bg && /url\(["']?([^"')]+)/.exec(bg.getAttribute('style'));
+      thumb = (img && img.getAttribute('src')) || (poster && poster.getAttribute('poster')) || (bgm && bgm[1]) || '';
+    }
+    const w = parseInt(data.originalWidth || data.width) || 16;
+    const h = parseInt(data.originalHeight || data.height) || 9;
+
+    const target = comp.querySelector('.se-module-video, .se-module-oembed, .se-section') || comp;
+    target.innerHTML =
+      `<div class="pv-video" style="aspect-ratio:${w}/${h}">` +
+      (thumb ? `<img src="${escHtml(thumb)}" alt="">` : '') +
+      `<span class="pv-video-play"></span></div>`;
+  });
+}
+
+// 표(se-table): 실제 모바일에선 네이버 에디터 뷰어 스크립트(se.viewer 의 TableComponent)가
+//   ① 에디터에서 정한 표 폭(.se-section-table style="width: 75%")을 지우고
+//   ② 표 폭 = 열 수 > 3 ? 열 수 × (화면폭 / 3) px : 100%   (화면폭 ≥ 768 이면 기준 6열)
+// 로 바꾼다. 미리보기 iframe 은 스크립트가 막혀 있어 같은 처리를 여기서 해 준다.
+// 화면폭은 iframe 폭(= 기기 폭)이므로 100vw 로 계산. 열 수는 모듈 데이터 → 없으면 첫 행 colspan 합.
+// 모듈 데이터 script 를 읽으므로 stripEditorUI 보다 먼저 호출할 것.
+function mobilizeTables(root) {
+  root.querySelectorAll('.se-component.se-table').forEach(comp => {
+    let cols = 0;
+    const dataEl = comp.querySelector('script.__se_module_data, [data-module]');
+    try { cols = parseInt(JSON.parse(dataEl.getAttribute('data-module')).data.columnCount, 10) || 0; } catch (e) {}
+    if (!cols) {
+      const tr = comp.querySelector('tr');
+      if (tr) cols = Array.from(tr.children).reduce((n, td) => n + (parseInt(td.getAttribute('colspan'), 10) || 1), 0);
+    }
+    comp.querySelectorAll('.se-section-table').forEach(sec => { sec.style.width = ''; });
+    const table = comp.querySelector('table');
+    if (!table) return;
+    const base = 3;   // 기준 열 수: 폰(<768px) 3열 — DEVICES 는 전부 폰이라 태블릿 6열은 불필요
+    table.style.width = cols > base ? `calc(${cols} * 100vw / ${base})` : '100%';
+  });
+}
+
 // 글쓰기 에디터에만 있는 편집 UI(컨트롤 버튼·툴바·플레이스홀더·접근성 텍스트) 제거.
 // 발행 뷰어에는 없는 요소라 미리보기에 그대로 두면 "위치이동/제목/삭제/취소/확인" 같은
 // 정체불명 텍스트가 보인다.
@@ -583,6 +660,14 @@ function viewerize(root) {
 // 미리보기에서 채워 넣을 작성자 정보 (fetch로 갱신됨)
 let previewNick = '';
 let previewProfile = '';
+let previewBlogName = '';
+
+function setAppbarBlogName(name) {
+  if (!name) return;
+  previewBlogName = name;
+  const el = document.querySelector('.appbar-blog-name');
+  if (el) el.textContent = name;
+}
 
 function escHtml(s) {
   return String(s == null ? '' : s)
@@ -695,6 +780,10 @@ function buildPreviewSrcdoc(sourceDoc, opts) {
     }
   }
 
+  // 동영상 → 정적 썸네일, 표 → 모바일 폭 (모듈 데이터 script 를 읽으므로 편집 UI 제거 전에)
+  staticizeVideos(clone);
+  mobilizeTables(clone);
+
   // 에디터 전용 편집 UI 제거 (작성자 주입 전에 실행)
   stripEditorUI(clone);
 
@@ -737,8 +826,111 @@ function buildPreviewSrcdoc(sourceDoc, opts) {
   const links = viewerCssUrls.map(u => `<link rel="stylesheet" href="${u}">`).join('');
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8">${links}` +
     `<style>html,body{margin:0;padding:0;background:#fff}` +
-    `#viewTypeSelector{padding-bottom:24px}</style></head>` +
+    `#viewTypeSelector{padding-bottom:24px}` +
+    `.pv-video{position:relative;width:100%;background:#000;overflow:hidden}` +
+    `.pv-video img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}` +
+    `.pv-video-play{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;` +
+    `border-radius:50%;background:rgba(0,0,0,.45)}` +
+    `.pv-video-play:after{content:"";position:absolute;left:22px;top:17px;` +
+    `border-style:solid;border-width:11px 0 11px 18px;border-color:transparent transparent transparent #fff}` +
+    `.pv-ad{padding:30px 20px 0}` +
+    `.pv-ad-inner{position:relative;border:1px solid rgba(0,0,0,.1);border-radius:6px;overflow:hidden}` +
+    `.pv-ad-img{aspect-ratio:1.91/1;background:#f2f3f5}` +
+    `.pv-ad-text{display:flex;flex-direction:column;gap:6px;padding:12px 14px 14px}` +
+    `.pv-ad-title{display:block;height:14px;width:70%;border-radius:3px;background:#eceef1}` +
+    `.pv-ad-sub{font:12px/1.4 -apple-system,sans-serif;color:#999}` +
+    `.pv-ad-sub b{font-weight:600;color:#666;margin-right:4px}` +
+    `</style></head>` +
     `<body><div class="post_ct wrap_rabbit" id="viewTypeSelector">${inner}</div></body></html>`;
+}
+
+// ── 본문 광고 자리 (네이버 애드포스트) ──
+// 광고는 발행 글을 연 뒤 네이버 스크립트가 본문 사이에 끼워 넣어서, 에디터 DOM 에는 없다.
+// 광고 내용은 매번 달라 재현할 수 없지만 "어디에·얼마만큼" 끼우는지는 네이버 규칙 그대로 따라가
+// 본문 간격이 실제와 같아지게 한다.
+// 출처: m.blog postView_2.30.1 (401.*.js) initializeContentAdvertise / findMiddlePosition
+//   adContentLocation 1=중간, 2=하단, 0=둘 다
+//   중간: 컴포넌트 clientHeight 누적이 전체의 30% 를 넘는 컴포넌트 "앞" (그 index 가 0 이면 생략)
+//   하단: 마지막 컴포넌트 뒤
+//   둘 다: 하단 + (#viewTypeSelector 높이 > 2700 일 때만) 30% 앞·60% 앞 두 곳
+//   광고 칸 CSS: .ssp_adcontent { padding: 30px 20px 0 }
+const AD_MODES = [
+  { value: 'auto',   label: '광고: 자동' },
+  { value: 'none',   label: '광고 없음' },
+  { value: 'middle', label: '광고: 중간' },
+  { value: 'bottom', label: '광고: 하단' },
+  { value: 'both',   label: '광고: 중간+하단' },
+];
+let adModeSetting = (() => { try { return localStorage.getItem('mobilePreviewAd') || 'auto'; } catch (e) { return 'auto'; } })();
+let adModeDetected = null;   // 'auto' 일 때 쓸 값 (fetchAdSetting 결과)
+
+function currentAdMode() {
+  if (adModeSetting !== 'auto') return adModeSetting;
+  return adModeDetected || 'both';   // 감지 실패 시: 애드포스트 기본값(둘 다)
+}
+
+// 내 블로그 발행 글(수정 중인 글, 없으면 최신 글)의 모바일 페이지에서 광고 설정을 읽는다.
+// m.blog.naver.com 은 blog.naver.com 출처의 요청을 CORS 로 허용한다.
+async function fetchAdSetting(blogId) {
+  if (!blogId) return null;
+  try {
+    let logNo = new URL(location.href).searchParams.get('logNo');
+    if (!logNo) {
+      const r = await fetch(`https://m.blog.naver.com/api/blogs/${encodeURIComponent(blogId)}/post-list?categoryNo=0&itemCount=1&page=1`, { credentials: 'include' });
+      const j = await r.json();
+      logNo = j && j.result && j.result.items && j.result.items[0] && j.result.items[0].logNo;
+    }
+    if (!logNo) return null;
+    const html = await (await fetch(`https://m.blog.naver.com/${encodeURIComponent(blogId)}/${logNo}`, { credentials: 'include' })).text();
+    const m = html.match(/advertise\\?"\s*:\s*\{([^}]*)\}/);
+    if (!m) return null;
+    const flag = k => new RegExp(k + '\\\\?"\\s*:\\s*true').test(m[1]);
+    const loc = (m[1].match(/adContentLocation\\?"\s*:\s*(-?\d+)/) || [])[1];
+    const mode = !(flag('adPostYn') && flag('adContentYn')) ? 'none'
+      : ({ 1: 'middle', 2: 'bottom', 0: 'both' }[loc] || 'none');
+    console.log('[미리보기] 광고 설정 감지:', m[1], '→', mode);
+    return mode;
+  } catch (e) {
+    console.log('[미리보기] 광고 설정 감지 실패:', e);
+    return null;
+  }
+}
+
+function makeAdSlot(doc, id) {
+  const d = doc.createElement('div');
+  d.id = id;
+  d.className = 'pv-ad';
+  d.innerHTML = '<div class="pv-ad-inner"><div class="pv-ad-img"></div>'
+    + '<div class="pv-ad-text"><span class="pv-ad-title"></span><span class="pv-ad-sub"><b>광고</b> 광고 자리 (미리보기 예시)</span></div></div>';
+  return d;
+}
+
+function insertAdSlots(doc, mode) {
+  if (!doc || mode === 'none') return;
+  if (doc.querySelector('.pv-ad')) return;   // 이미 넣음 (onload 중복 방지)
+  const comps = Array.from(doc.querySelectorAll('.se-main-container .se-component'));
+  if (comps.length < 1) return;
+
+  const findMiddle = ratio => {
+    if (comps.length < 2) return -1;
+    let left = comps.reduce((a, c) => a + c.clientHeight, 0) * ratio, idx = -1;
+    for (let i = 0; i < comps.length && left >= 0; i++) {
+      left -= comps[i].clientHeight < 1 ? 400 : comps[i].clientHeight;
+      idx = i;
+    }
+    return idx;
+  };
+  // 위치는 광고를 넣기 전 높이로 모두 계산 (네이버도 빈 광고 div 상태에서 계산)
+  const wrapH = (doc.getElementById('viewTypeSelector') || doc.body).offsetHeight;
+  const mid1 = (mode === 'middle' || (mode === 'both' && wrapH > 2700)) ? findMiddle(0.3) : -1;
+  const mid2 = (mode === 'both' && wrapH > 2700) ? findMiddle(0.6) : -1;
+
+  if (mode === 'bottom' || mode === 'both') {
+    const last = comps[comps.length - 1];
+    last.parentNode.appendChild(makeAdSlot(doc, 'ad-bottom-portal'));
+  }
+  if (mid1 > 0) comps[mid1].parentNode.insertBefore(makeAdSlot(doc, 'ad-content-1-portal'), comps[mid1]);
+  if (mid2 > 0 && mid2 !== mid1) comps[mid2].parentNode.insertBefore(makeAdSlot(doc, 'ad-content-2-portal'), comps[mid2]);
 }
 
 // iframe 높이를 내부 콘텐츠에 맞춰 늘려 부모(#mobile-preview-body)가 통째로 스크롤되게 함
@@ -749,7 +941,11 @@ function sizePreviewFrame(frame) {
       if (d && d.documentElement) frame.style.height = d.documentElement.scrollHeight + 'px';
     } catch (e) {}
   };
-  frame.onload = () => { resize(); setTimeout(resize, 300); setTimeout(resize, 1200); };
+  frame.onload = () => {
+    // onload = 이미지까지 로드된 뒤 → 컴포넌트 높이가 확정된 상태에서 광고 위치 계산
+    try { insertAdSlots(frame.contentDocument, currentAdMode()); } catch (e) {}
+    resize(); setTimeout(resize, 300); setTimeout(resize, 1200);
+  };
 }
 
 function getBodyHTML(docArg) {
@@ -1003,16 +1199,53 @@ async function scanEditorContent() {
   if (btn) { btn.textContent = '⟳'; btn.disabled = false; }
 }
 
+// 이미 옵저버를 붙인 문서 (중복 부착 방지 — 폴링 중 매 틱 호출되므로 필수)
+const observedDocs = new WeakSet();
+
+// iframe 내부 변경은 부모 document 옵저버에 전파되지 않으므로 문서마다 따로 붙인다.
+// 늦게 생긴 iframe 도 잡히도록 준비 폴링에서 반복 호출된다.
 function observeIframe() {
-  const doc = getIframeDoc();
-  if (!doc) return;
-  new MutationObserver(debouncedUpdate).observe(doc.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class'] });
+  for (const doc of getContentIframeDocs()) {
+    if (observedDocs.has(doc)) continue;
+    observedDocs.add(doc);
+    new MutationObserver(debouncedUpdate).observe(doc.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class'] });
+  }
+}
+
+// 글쓰기 진입 경로가 여러 개다:
+//   새 글      → PostWriteForm.naver
+//   기존 글 수정 → PostUpdateForm.naver?...&logNo=...   ('write' 가 없음!)
+// URL 문자열만 믿지 말고 실제 에디터 DOM 존재도 같이 본다.
+function isEditorPage() {
+  // 글쓰기·수정 주소 형태 (블로그 아이디에 'editor'·'write' 가 들어간 발행 글을 오인하지 않게
+  // 아이디 자리가 아닌 "파일명·경로·쿼리" 패턴만 본다)
+  //   PostWriteForm.naver · PostUpdateForm.naver · GoBlogWrite.naver 등 *write*/*update*.naver
+  //   /{id}/postwrite · /{id}/postupdate · ?Redirect=Write|Update
+  const href = window.location.href.toLowerCase();
+  const byUrl = /[a-z]*(?:write|update)[a-z]*\.naver|\/post(?:write|update)(?:[/?#]|$)|[?&]redirect=(?:write|update)\b/.test(href);
+  const byDom = !byUrl && hasEditorDom();
+  if (byUrl || byDom) console.log('[미리보기] 에디터 감지:', byUrl ? '주소' : 'DOM', href);
+  return byUrl || byDom;
+}
+
+// top document + 모든 iframe 에서 SE4 "에디터" 흔적을 찾는다.
+// (에디터는 보통 mainFrame iframe 안이라 top 만 보면 놓친다.)
+// ⚠️ .se-component / .se-main-container 는 발행 글 페이지에도 있다 → 발행 글은 이를
+//    .se-viewer 로 감싸므로, 컴포넌트는 있는데 .se-viewer 가 없는 문서만 에디터로 본다.
+function hasEditorDom() {
+  // 편집 중에만 있는 흔적: 입력 가능 영역·툴바·플레이스홀더 (발행 글 페이지엔 없음)
+  const EDIT_ONLY = '[contenteditable="true"], .se-toolbar, .se-placeholder, .se-component-toolbar, .se-section-control';
+  const isEditorDoc = d => {
+    try {
+      if (!d.querySelector('.se-main-container, .se-component')) return false;
+      return !d.querySelector('.se-viewer') || !!d.querySelector(EDIT_ONLY);
+    } catch (e) { return false; }
+  };
+  return isEditorDoc(document) || getContentIframeDocs().some(isEditorDoc);
 }
 
 function init() {
-  const href = window.location.href.toLowerCase();
-  const isEditorPage = href.includes('postwrite') || href.includes('write') || document.querySelector('.se-main-container');
-  if (!isEditorPage) return;
+  if (!isEditorPage()) return false;
 
   const panel = createPanel();
   const observer = new MutationObserver((mutations) => {
@@ -1021,16 +1254,24 @@ function init() {
   });
   observer.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class'] });
 
-  setTimeout(() => {
+  // SE4 부팅 시점은 네트워크·글 크기에 따라 제각각이라 고정 타임아웃으로는 못 맞춘다.
+  // 실제 컴포넌트가 잡힐 때까지 폴링하고, 잡힌 뒤에도 몇 번 더 갱신해 뒤늦은 로드를 흡수한다.
+  let ticks = 0, settled = 0;
+  const ready = setInterval(() => {
+    ticks++;
     resolveViewerCSS();   // 현재 SE 버전 반영 (에디터 CSS 로드 후)
-    observeIframe();
+    observeIframe();      // 늦게 붙은 에디터 iframe 도 이 시점에 감시 시작
     updatePreview();
-    // appbar 블로그 이름만 갱신 (author 닉네임은 applyUserInfo가 담당 — 덮어쓰지 않음)
+
+    // appbar 블로그 이름: 현재 페이지 제목에서 찾았을 때만 갱신
+    // (못 찾으면 getBlogInfo 가 '내 블로그' 기본값을 주므로 덮어쓰지 않음 — fetch 결과가 채움)
     const info = getBlogInfo();
-    const appbarName = document.querySelector('.appbar-blog-name');
-    if (appbarName) appbarName.textContent = info.blogName;
-  }, 1500);
-  setTimeout(() => { resolveViewerCSS(); observeIframe(); updatePreview(); }, 4000);
+    if (info.blogName !== '내 블로그') setAppbarBlogName(info.blogName);
+
+    if (hasEditorDom()) settled++;
+    // 에디터를 찾고 3틱 더 돌렸거나, 30초 지나면 폴링 종료 (이후엔 옵저버가 담당)
+    if (settled >= 3 || ticks > 60) clearInterval(ready);
+  }, 500);
 
   // ⟳ 버튼: 기존 글 수정 시 수동으로 전체 이미지 재스캔
   document.getElementById('preview-scan-btn')
@@ -1052,15 +1293,46 @@ function init() {
 
   // Step 2: 그래도 없으면 외부 페이지 fetch
   const blogId = extractBlogId();
-  if (blogId && !nickFromPage) {
-    fetchBlogUserInfo(blogId).then(({ nickname, profileImg }) => {
-      applyUserInfo(nickname, profileImg);
+
+  // 광고 설정 자동 감지 (선택이 '자동'일 때 사용)
+  fetchAdSetting(blogId).then(mode => {
+    if (!mode) return;
+    adModeDetected = mode;
+    const opt = document.querySelector('#mobile-preview-ad option[value="auto"]');
+    const lbl = (AD_MODES.find(m => m.value === mode) || {}).label || '';
+    if (opt) opt.textContent = '광고: 자동(' + lbl.replace(/^광고:? ?/, '') + ')';
+    if (adModeSetting === 'auto') updatePreview();
+  });
+  // 블로그 이름은 글쓰기 페이지 제목에 없는 경우가 많아 닉네임이 있어도 fetch 한다
+  if (blogId && (!nickFromPage || !previewBlogName)) {
+    fetchBlogUserInfo(blogId).then(({ nickname, profileImg, blogName }) => {
+      if (blogName) setAppbarBlogName(blogName);
+      if (!nickFromPage) applyUserInfo(nickname, profileImg);
     });
   }
 }
 
+// 진입 시점에 에디터 판별이 안 될 수 있다 (iframe·에디터 스크립트가 아직 안 붙음).
+// 한 번 실패했다고 영구 포기하지 말고 붙을 때까지 지켜본다.
+let started = false;
+function tryStart() {
+  if (started) return;
+  if (init() !== false) started = true;
+}
+
+function bootstrap() {
+  tryStart();
+  if (started) return;
+  let ticks = 0;
+  const watch = setInterval(() => {
+    tryStart();
+    // 30초 안에 에디터가 안 나타나면 글쓰기 페이지가 아닌 것으로 보고 중단
+    if (started || ++ticks > 60) clearInterval(watch);
+  }, 500);
+}
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', bootstrap);
 } else {
-  setTimeout(init, 2000);
+  bootstrap();
 }
