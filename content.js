@@ -28,10 +28,13 @@ function getSavedDevice() {
 // 브라우저 창이 기기보다 낮으면 레이아웃(줄바꿈 등)은 그대로 두고 통째로 축소해서 보여준다.
 // 폰 테두리 두께 (style.css #pv-device padding 과 같아야 함)
 const PV_BEZEL = 5;
+// 실제 네이버 앱엔 상태바 아래 인앱 주소줄(blog.naver.com ✕, 25px)이 있어 본문이 그만큼 덜 보인다.
+// 미리보기에선 주소줄을 그리지 않으므로 화면 높이에서 빼서 본문이 보이는 양을 실제와 같게 맞춘다.
+const PV_HIDDEN_URL_BAR = 25;
 
 function applyDevice(panel, device) {
   panel.style.width = (device.width + PV_BEZEL * 2) + 'px';
-  panel.querySelector('#phone-screen').style.height = (device.height - device.statusBar) + 'px';
+  panel.querySelector('#phone-screen').style.height = (device.height - device.statusBar - PV_HIDDEN_URL_BAR) + 'px';
   if (panel.style.display === 'none') return;   // 닫힌 상태에선 크기 측정 불가 → 열 때 다시 호출
   const avail = window.innerHeight - panel.offsetTop - 20;
   const scale = Math.min(1, avail / panel.offsetHeight);   // offsetHeight 는 transform 영향 없음
