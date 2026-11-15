@@ -1426,34 +1426,50 @@ function measurePreviewHeight(d) {
   return Math.ceil(bottom + mb);
 }
 
-function sizePreviewFrame(frame, slidePositions) {
+// 본문이 iframe 에 들어온 뒤 할 일: 슬라이드 동작, 넘겨 둔 위치 복원, 높이 맞추기(+크기 변화 감시),
+// 그리고 사진 크기가 정해진 뒤 광고 자리 계산. 새 문서(srcdoc)든 본문만 바꿔 끼운 경우든 공통.
+function afterPreviewRender(frame, slidePositions) {
+  const d = frame.contentDocument;
+  if (!d || !d.documentElement) return;
   const resize = () => {
     try {
-      const d = frame.contentDocument;
-      if (!d || !d.documentElement) return;
       const h = measurePreviewHeight(d);
       if (h > 0) frame.style.height = h + 'px';
     } catch (e) {}
   };
-  // 이전 문서에 붙인 크기 감시는 정리 (srcdoc 를 바꿀 때마다 새 문서)
+  try {
+    enableImageSlides(d);
+    restoreSlidePositions(d, slidePositions);
+  } catch (e) {}
+  resize();
+  // 사진이 늦게 로드되거나 진행바·광고 자리가 생기는 등 본문 높이가 바뀔 때마다 다시 맞춤
+  if (frame._pvResizeObserver) { try { frame._pvResizeObserver.disconnect(); } catch (e) {} frame._pvResizeObserver = null; }
+  try {
+    const wrap = d.getElementById('viewTypeSelector') || d.body;
+    if (wrap && typeof ResizeObserver === 'function') {
+      frame._pvResizeObserver = new ResizeObserver(resize);
+      frame._pvResizeObserver.observe(wrap);
+    } else { setTimeout(resize, 300); setTimeout(resize, 1200); }
+  } catch (e) {}
+  // 광고 자리는 컴포넌트 높이로 위치를 정하므로 사진이 다 로드된 뒤 (최대 4초 기다림)
+  const pending = [...d.images].filter(img => !img.complete);
+  const waitImgs = Promise.race([
+    Promise.all(pending.map(img => new Promise(r => { img.addEventListener('load', r, { once: true }); img.addEventListener('error', r, { once: true }); }))),
+    new Promise(r => setTimeout(r, 4000)),
+  ]);
+  waitImgs.then(() => {
+    if (frame.contentDocument !== d) return;   // 그 사이 새 문서로 바뀜
+    try { insertAdSlots(d, currentAdMode()); } catch (e) {}
+    resize();
+  });
+}
+
+// 새 문서(srcdoc)로 그릴 때: 로드가 끝나면 afterPreviewRender
+function sizePreviewFrame(frame, slidePositions) {
   if (frame._pvResizeObserver) { try { frame._pvResizeObserver.disconnect(); } catch (e) {} frame._pvResizeObserver = null; }
   frame.onload = () => {
-    // onload = 이미지까지 로드된 뒤 → 컴포넌트 높이가 확정된 상태에서 광고 위치 계산
-    try {
-      enableImageSlides(frame.contentDocument);
-      restoreSlidePositions(frame.contentDocument, slidePositions);
-    } catch (e) {}
-    try { insertAdSlots(frame.contentDocument, currentAdMode()); } catch (e) {}
-    resize();
-    // 사진이 늦게 로드되거나 슬라이드 진행바가 생기는 등 본문 높이가 바뀔 때마다 다시 맞춤
-    try {
-      const d = frame.contentDocument;
-      const wrap = d.getElementById('viewTypeSelector') || d.body;
-      if (wrap && typeof ResizeObserver === 'function') {
-        frame._pvResizeObserver = new ResizeObserver(resize);
-        frame._pvResizeObserver.observe(wrap);
-      } else { setTimeout(resize, 300); setTimeout(resize, 1200); }
-    } catch (e) { setTimeout(resize, 300); setTimeout(resize, 1200); }
+    frame._pvReady = true;
+    afterPreviewRender(frame, slidePositions);
   };
 }
 
@@ -1584,10 +1600,35 @@ function updatePreview() {
     srcdoc = buildPreviewSrcdoc(getIframeDoc() || document, { isEditor: true, author });
   } catch (e) { console.warn('[미리보기] 렌더 오류:', e); }
 
-  sizePreviewFrame(frame, saveSlidePositions(frame));
+  // 결과가 같으면 다시 그리지 않음 (커서 이동 등). 광고 자리는 그린 뒤에 끼우므로 광고 설정도 비교에 포함
+  const renderKey = srcdoc ? srcdoc + '\n<!--ad:' + currentAdMode() + '-->' : null;
+  if (renderKey && renderKey === frame._pvLastKey) return;
+
+  const positions = saveSlidePositions(frame);
   if (srcdoc) {
+    // 스타일(head)이 그대로고 이전 문서가 다 떠 있으면 → iframe 은 두고 본문만 바꿔 끼움.
+    // 스타일 파일을 다시 읽지 않고, 같은 사진은 받아 둔 걸 그대로 써서 깜빡임·지연이 없다.
+    const head = srcdoc.slice(0, srcdoc.indexOf('</head>'));
+    const d = frame.contentDocument;
+    if (frame._pvReady && frame._pvHead === head && d && d.readyState === 'complete' && d.body) {
+      try {
+        const nd = new DOMParser().parseFromString(srcdoc, 'text/html');
+        d.body.replaceWith(d.adoptNode(nd.body));
+        frame._pvLastKey = renderKey;
+        afterPreviewRender(frame, positions);
+        return;
+      } catch (e) { /* 실패하면 아래에서 통째로 다시 그림 */ }
+    }
+    frame._pvReady = false;
+    frame._pvHead = head;
+    frame._pvLastKey = renderKey;
+    sizePreviewFrame(frame, positions);
     frame.srcdoc = srcdoc;
   } else {
+    frame._pvReady = false;
+    frame._pvHead = null;
+    frame._pvLastKey = null;
+    sizePreviewFrame(frame, positions);
     // 내용을 못 찾음 → 화면에 진단 정보 표시 (콘솔 안 봐도 원인 파악 가능)
     const d = pickSourceDoc(getIframeDoc() || document);
     frame.srcdoc = '<body style="font:13px sans-serif;padding:16px;color:#c0392b;line-height:1.7">'
