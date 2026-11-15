@@ -145,7 +145,7 @@ function createPanel() {
   toggle.id = 'mobile-preview-toggle';
   toggle.type = 'button';
   toggle.setAttribute('aria-label', '모바일 미리보기 열기');
-  toggle.innerHTML = '<svg viewBox="0 0 128 128"><defs><linearGradient id="pvToggleGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B4EC51"/><stop offset="1" stop-color="#2FBF8F"/></linearGradient></defs><rect width="128" height="128" rx="28" fill="url(#pvToggleGrad)"/><rect x="14" y="30" width="62" height="50" rx="8" fill="#fff" opacity=".3"/><rect x="22" y="41" width="30" height="5" rx="2.5" fill="#fff" opacity=".9"/><rect x="22" y="52" width="40" height="5" rx="2.5" fill="#fff" opacity=".6"/><rect x="22" y="63" width="24" height="5" rx="2.5" fill="#fff" opacity=".6"/><rect x="58" y="26" width="52" height="86" rx="13" fill="#fff"/><rect x="77" y="31" width="14" height="3.5" rx="1.75" fill="#DDE5D6"/><rect x="65" y="41" width="38" height="25" rx="5" fill="#E3F7D2"/><circle cx="74" cy="50" r="3.5" fill="#7FD36B"/><path d="M67 64 L77 55 L84 61 L90 56 L101 64 Z" fill="#7FD36B"/><rect x="65" y="73" width="30" height="4.5" rx="2.25" fill="#1F6F55"/><rect x="65" y="83" width="38" height="4.5" rx="2.25" fill="#CFDCD3"/><rect x="65" y="93" width="24" height="4.5" rx="2.25" fill="#CFDCD3"/><circle cx="106" cy="28" r="11" fill="#2FBF8F"/><circle cx="106" cy="28" r="6.5" fill="#FFFFFF"/></svg><span class="pv-toggle-label">미리보기 열기</span>';
+  toggle.innerHTML = '<svg viewBox="0 0 38 68" width="38" height="68"><defs><linearGradient id="pvToggleGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B4EC51"/><stop offset="1" stop-color="#2FBF8F"/></linearGradient></defs><rect width="38" height="68" rx="10" fill="url(#pvToggleGrad)"/><rect x="4" y="8" width="30" height="52" rx="4" fill="#fff"/><rect x="14.5" y="3" width="9" height="2.4" rx="1.2" fill="#fff" opacity=".7"/><rect x="8" y="13" width="22" height="13" rx="2.5" fill="#E3F7D2"/><path d="M9 25 L15 19 L19 22.5 L22 20 L29 25 Z" fill="#9EDB72"/><rect x="8" y="31" width="16" height="3" rx="1.5" fill="#1F6F55"/><rect x="8" y="38" width="22" height="3" rx="1.5" fill="#D5E3DA"/><rect x="8" y="45" width="13" height="3" rx="1.5" fill="#D5E3DA"/></svg><span class="pv-toggle-label">미리보기 열기</span>';
   document.body.appendChild(toggle);
 
   const TOGGLE_POS_KEY = 'mobilePreviewTogglePos';
@@ -155,11 +155,11 @@ function createPanel() {
 
   function placeToggle() {
     if (toggle.style.display === 'none' || !toggle.style.display) return;
-    const size = toggle.offsetWidth || 52;
-    const maxY = window.innerHeight - size - TOGGLE_MARGIN;
-    const y = togglePos.yRatio == null ? maxY - 96 : togglePos.yRatio * window.innerHeight;
+    const w = toggle.offsetWidth || 38, h = toggle.offsetHeight || 68;
+    const maxY = window.innerHeight - h - TOGGLE_MARGIN;
+    const y = togglePos.yRatio == null ? maxY - 80 : togglePos.yRatio * window.innerHeight;
     toggle.style.top = Math.round(Math.min(Math.max(y, TOGGLE_MARGIN), maxY)) + 'px';
-    toggle.style.left = (togglePos.side === 'left' ? TOGGLE_MARGIN : window.innerWidth - size - TOGGLE_MARGIN) + 'px';
+    toggle.style.left = (togglePos.side === 'left' ? TOGGLE_MARGIN : window.innerWidth - w - TOGGLE_MARGIN) + 'px';
     toggle.dataset.side = togglePos.side;
   }
   window.addEventListener('resize', placeToggle);
@@ -178,9 +178,8 @@ function createPanel() {
     if (!dragged && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return;
     dragged = true;
     toggle.classList.add('dragging');
-    const size = toggle.offsetWidth;
-    toggle.style.left = Math.min(Math.max(e.clientX - drag.dx, 0), window.innerWidth - size) + 'px';
-    toggle.style.top = Math.min(Math.max(e.clientY - drag.dy, 0), window.innerHeight - size) + 'px';
+    toggle.style.left = Math.min(Math.max(e.clientX - drag.dx, 0), window.innerWidth - toggle.offsetWidth) + 'px';
+    toggle.style.top = Math.min(Math.max(e.clientY - drag.dy, 0), window.innerHeight - toggle.offsetHeight) + 'px';
   });
   const endDrag = () => {
     if (!drag) return;
@@ -198,16 +197,86 @@ function createPanel() {
   toggle.addEventListener('pointerup', endDrag);
   toggle.addEventListener('pointercancel', endDrag);
 
-  document.getElementById('mobile-preview-close').addEventListener('click', () => {
-    panel.style.display = 'none';
+  // ── 열기/닫기 애니메이션 ──
+  // 열기: 작은 폰 버튼 자리에서 폰 모양(#pv-morph)이 패널 크기·위치까지 커진 뒤, 패널 내용이 페이드 인.
+  // 닫기: 패널 내용이 먼저 사라지고 폰 모양이 버튼 자리로 줄어든 뒤 버튼이 톡 나타남.
+  // 크기는 transform 이 아니라 left/top/width/height 로 움직여 테두리 두께가 일정하게 유지됨.
+  // 시스템 "동작 줄이기" 설정이면 애니메이션 없이 바로 전환.
+  const reduceMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const EASE = 'cubic-bezier(.2,.8,.2,1)';
+  let animating = false;
+  const box = (r, radius) => ({ left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', borderRadius: radius + 'px' });
+  const makeMorph = (r, radius) => {
+    const m = document.createElement('div');
+    m.id = 'pv-morph';
+    m.innerHTML = '<div class="pv-morph-screen"></div>';
+    Object.assign(m.style, box(r, radius));
+    document.body.appendChild(m);
+    return m;
+  };
+  const panelRadius = () => 20 * ((panel.getBoundingClientRect().width / panel.offsetWidth) || 1);   // applyDevice 축소 반영
+
+  async function openPanel() {
+    if (animating) return;
+    const from = toggle.getBoundingClientRect();
+    // 패널을 보이지 않게 먼저 펼쳐 최종 크기·위치를 잰다 (transform 전환은 잠시 끔)
+    const prevTransition = panel.style.transition;
+    panel.style.transition = 'none';
+    panel.style.opacity = '0';
+    panel.style.display = 'flex';
+    applyDevice(panel, device);
+    toggle.style.display = 'none';
+    const done = () => { panel.style.opacity = ''; panel.style.transition = prevTransition; animating = false; };
+    if (reduceMotion() || !panel.animate) { done(); return; }
+    animating = true;
+    const to = panel.getBoundingClientRect();
+    const morph = makeMorph(from, 10);
+    try {
+      await morph.animate([box(from, 10), box(to, panelRadius())], { duration: 380, easing: EASE, fill: 'forwards' }).finished;
+      panel.style.opacity = '';
+      await Promise.all([
+        panel.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' }).finished,
+        morph.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out', fill: 'forwards' }).finished,
+      ]);
+    } catch (e) {}
+    morph.remove();
+    done();
+  }
+
+  async function closePanel() {
+    if (animating) return;
+    const from = panel.getBoundingClientRect();
+    const radius = panelRadius();
+    // 버튼이 놓일 자리를 미리 잰다 (안 보이게 배치)
+    toggle.style.visibility = 'hidden';
     toggle.style.display = 'flex';
     placeToggle();
-  });
+    const to = toggle.getBoundingClientRect();
+    const finish = () => { panel.style.display = 'none'; panel.style.opacity = ''; toggle.style.visibility = ''; animating = false; };
+    if (reduceMotion() || !panel.animate) { finish(); return; }
+    animating = true;
+    const morph = makeMorph(from, radius);
+    morph.style.opacity = '0';
+    try {
+      const fadeOut = panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-in', fill: 'forwards' });
+      await Promise.all([
+        fadeOut.finished,
+        morph.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 140, easing: 'ease-in', fill: 'forwards' }).finished,
+      ]);
+      panel.style.display = 'none';
+      fadeOut.cancel();   // 'forwards' 로 남은 투명도가 다음에 열 때 패널을 가리지 않게
+      await morph.animate([{ ...box(from, radius), opacity: 1 }, { ...box(to, 10), opacity: 1 }], { duration: 340, easing: EASE, fill: 'forwards' }).finished;
+      toggle.style.visibility = '';
+      morph.remove();
+      await toggle.animate([{ transform: 'scale(.86)' }, { transform: 'scale(1.06)' }, { transform: 'scale(1)' }], { duration: 220, easing: 'ease-out' }).finished;
+    } catch (e) { morph.remove(); }
+    finish();
+  }
+
+  document.getElementById('mobile-preview-close').addEventListener('click', closePanel);
   toggle.addEventListener('click', e => {
     if (dragged) { dragged = false; e.preventDefault(); return; }   // 방금 끌었던 거면 열지 않음
-    panel.style.display = 'flex';
-    toggle.style.display = 'none';
-    applyDevice(panel, device);
+    openPanel();
   });
   document.getElementById('mobile-preview-ad').addEventListener('change', (e) => {
     adModeSetting = e.target.value;
