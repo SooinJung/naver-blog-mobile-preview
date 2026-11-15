@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Blobile - Live Mobile Preview for Naver Blog"
+  },
+  "extShortName": {
+    "message": "Blobile"
+  },
+  "extDescription": {
+    "message": "See how your Naver Blog post looks on a phone, live, while you write. (Not an official NAVER product)"
+  }
+}

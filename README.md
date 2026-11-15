@@ -1,4 +1,8 @@
-# 📱 Naver Blog Mobile Preview
+# Blobile
+
+<img src="icons/icon128.png" width="96" align="right" alt="">
+
+**블로바일** (Blog + Mobile): 네이버 블로그 모바일 미리보기
 
 > 네이버 블로그 글쓰기 화면 옆에 **실제 모바일 화면과 똑같은 미리보기**를 실시간으로 띄워 주는 크롬 익스텐션 (비공식)
 
@@ -47,6 +51,7 @@ git clone https://github.com/SooinJung/naver-blog-mobile-preview.git
 
 ```
 ├── manifest.json   # Manifest V3 (추가 권한 없음)
+├── _locales/       # 이름·설명 (ko 기본, en)
 ├── content.js      # 패널 생성, 에디터 감지, 미리보기 렌더
 ├── style.css       # 패널(폰 프레임) UI
 ├── PRIVACY.md      # 개인정보처리방침

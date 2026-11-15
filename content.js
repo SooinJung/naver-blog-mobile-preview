@@ -60,7 +60,7 @@ function createPanel() {
   panel.innerHTML = `
     <!-- 컨트롤 바 -->
     <div id="mobile-preview-header">
-      <span id="mobile-preview-title">📱 미리보기</span>
+      <span id="mobile-preview-title">Blobile</span>
       <select id="mobile-preview-device">${deviceOptions}</select>
       <select id="mobile-preview-ad" title="본문 광고 자리 (네이버 애드포스트)">${adOptions}</select>
       <button id="preview-scan-btn" title="전체 이미지 재스캔">⟳</button>
@@ -142,6 +142,7 @@ function createPanel() {
   const toggle = document.createElement('button');
   toggle.id = 'mobile-preview-toggle';
   toggle.innerHTML = '📱';
+  toggle.title = 'Blobile 모바일 미리보기 열기';
   document.body.appendChild(toggle);
 
   document.getElementById('mobile-preview-close').addEventListener('click', () => {

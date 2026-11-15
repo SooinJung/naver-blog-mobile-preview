@@ -1,0 +1,13 @@
+{
+  "extName": {
+    "message": "Blobile - 네이버 블로그 모바일 미리보기",
+    "description": "웹스토어·확장 프로그램 목록에 보이는 이름 (Blobile = 블로바일)"
+  },
+  "extShortName": {
+    "message": "Blobile"
+  },
+  "extDescription": {
+    "message": "글을 쓰는 동안 폰에서 보일 모습을 실시간으로 보여 줘요. (네이버 공식 제품이 아닙니다)",
+    "description": "manifest 설명 (132자 이하)"
+  }
+}
