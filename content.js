@@ -42,7 +42,7 @@ function applyDevice(panel, device) {
 }
 
 // 툴바 왼쪽 작은 마리모 (icons/icon.svg 와 동일)
-const PV_BRAND_ICON = '<svg viewBox="0 0 128 128"><path d="M4 98 A60 60 0 0 1 124 98 V100 A8 8 0 0 1 116 108 H12 A8 8 0 0 1 4 100 Z" fill="#1F5A3A"/><ellipse cx="46.00" cy="72.00" rx="13" ry="16.5" fill="#fff"/><circle cx="46.00" cy="65.47" r="7.80" fill="#1B1A17"/><circle cx="43.04" cy="62.35" r="2.34" fill="#fff"/><ellipse cx="82.00" cy="72.00" rx="13" ry="16.5" fill="#fff"/><circle cx="82.00" cy="65.47" r="7.80" fill="#1B1A17"/><circle cx="79.04" cy="62.35" r="2.34" fill="#fff"/></svg>';
+const PV_BRAND_ICON = '<svg viewBox="0 0 128 128"><rect x="86" y="6" width="22" height="22" rx="2" fill="#8EC5F2" transform="rotate(-20 97 17)"/><polygon points="24.3,9.2 26.3,17.8 34.9,20.2 27.3,24.8 27.7,33.7 21.0,27.9 12.6,31.0 16.1,22.8 10.5,15.9 19.4,16.6" fill="#B3261E" stroke="#B3261E" stroke-width="3" stroke-linejoin="round"/><polygon points="110,38 126,62 102,64" fill="#F2C14E"/><path d="M4 98 A60 60 0 0 1 124 98 V100 A8 8 0 0 1 116 108 H12 A8 8 0 0 1 4 100 Z" fill="#1F5A3A"/><ellipse cx="46.00" cy="72.00" rx="13" ry="16.5" fill="#fff"/><circle cx="46.00" cy="65.47" r="7.80" fill="#1B1A17"/><circle cx="43.04" cy="62.35" r="2.34" fill="#fff"/><ellipse cx="82.00" cy="72.00" rx="13" ry="16.5" fill="#fff"/><circle cx="82.00" cy="65.47" r="7.80" fill="#1B1A17"/><circle cx="79.04" cy="62.35" r="2.34" fill="#fff"/></svg>';
 
 function createPanel() {
   // option value 는 기기 이름 (폭이 같은 기기가 여럿이라 폭으로는 구분 불가)
