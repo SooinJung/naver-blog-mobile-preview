@@ -50,6 +50,7 @@ git clone https://github.com/SooinJung/naver-blog-mobile-preview.git
 ├── content.js      # 패널 생성, 에디터 감지, 미리보기 렌더
 ├── style.css       # 패널(폰 프레임) UI
 ├── PRIVACY.md      # 개인정보처리방침
+├── icons/          # 아이콘 (icon.svg 가 원본, png 3종은 여기서 렌더)
 └── test/           # 실제 발행 글과 좌우 비교하는 오프라인 도구
 ```
 
