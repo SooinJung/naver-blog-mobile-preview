@@ -139,7 +139,7 @@ function createPanel() {
   window.addEventListener('resize', () => applyDevice(panel, device));
 
   // 플로팅 재열기 버튼 (패널을 닫으면 나타남)
-  //  - 끌어서 옮길 수 있고, 놓으면 가까운 왼쪽/오른쪽 가장자리에 붙는다. 위치는 저장.
+  //  - 끌어서 옮길 수 있고, 놓은 자리에 그대로 머문다. 위치는 창 크기 대비 비율로 저장.
   //  - 기본 위치는 오른쪽 아래 (위쪽은 네이버 에디터 툴바를 가림)
   const toggle = document.createElement('button');
   toggle.id = 'mobile-preview-toggle';
@@ -150,17 +150,22 @@ function createPanel() {
 
   const TOGGLE_POS_KEY = 'mobilePreviewTogglePos';
   const TOGGLE_MARGIN = 16;
-  let togglePos = { side: 'right', yRatio: null };   // yRatio: 창 높이 대비 위치 (창 크기가 바뀌어도 비슷한 자리)
+  // xRatio·yRatio: 창 폭·높이 대비 위치 (창 크기가 바뀌어도 비슷한 자리). null 이면 기본 위치(오른쪽 아래)
+  let togglePos = { xRatio: null, yRatio: null };
   try { togglePos = Object.assign(togglePos, JSON.parse(localStorage.getItem(TOGGLE_POS_KEY) || '{}')); } catch (e) {}
 
   function placeToggle() {
     if (toggle.style.display === 'none' || !toggle.style.display) return;
     const w = toggle.offsetWidth || 38, h = toggle.offsetHeight || 68;
-    const maxY = window.innerHeight - h - TOGGLE_MARGIN;
-    const y = togglePos.yRatio == null ? maxY - 80 : togglePos.yRatio * window.innerHeight;
-    toggle.style.top = Math.round(Math.min(Math.max(y, TOGGLE_MARGIN), maxY)) + 'px';
-    toggle.style.left = (togglePos.side === 'left' ? TOGGLE_MARGIN : window.innerWidth - w - TOGGLE_MARGIN) + 'px';
-    toggle.dataset.side = togglePos.side;
+    let x = togglePos.xRatio == null ? window.innerWidth - w - TOGGLE_MARGIN : togglePos.xRatio * window.innerWidth;
+    let y = togglePos.yRatio == null ? window.innerHeight - h - TOGGLE_MARGIN - 80 : togglePos.yRatio * window.innerHeight;
+    // 놓은 자리를 존중하고, 창이 줄어 밖으로 나갈 때만 안쪽으로 당긴다
+    x = Math.min(Math.max(x, 0), window.innerWidth - w);
+    y = Math.min(Math.max(y, 0), window.innerHeight - h);
+    toggle.style.left = Math.round(x) + 'px';
+    toggle.style.top = Math.round(y) + 'px';
+    // "미리보기 열기" 라벨은 공간이 넓은 쪽으로
+    toggle.dataset.side = x + w / 2 < window.innerWidth / 2 ? 'left' : 'right';
   }
   window.addEventListener('resize', placeToggle);
 
@@ -168,8 +173,9 @@ function createPanel() {
   let drag = null, dragged = false;
   toggle.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
-    const r = toggle.getBoundingClientRect();
-    drag = { x0: e.clientX, y0: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top };
+    // 위치는 style.left/top(확대 전 실제 자리) 기준. getBoundingClientRect 는 호버·드래그 확대가 섞여 몇 px 어긋남
+    const left = parseFloat(toggle.style.left) || 0, top = parseFloat(toggle.style.top) || 0;
+    drag = { x0: e.clientX, y0: e.clientY, dx: e.clientX - left, dy: e.clientY - top };
     dragged = false;
     try { toggle.setPointerCapture(e.pointerId); } catch (_) {}
   });
@@ -186,13 +192,12 @@ function createPanel() {
     drag = null;
     toggle.classList.remove('dragging');
     if (!dragged) return;
-    const r = toggle.getBoundingClientRect();
     togglePos = {
-      side: r.left + r.width / 2 < window.innerWidth / 2 ? 'left' : 'right',
-      yRatio: r.top / window.innerHeight,
+      xRatio: (parseFloat(toggle.style.left) || 0) / window.innerWidth,
+      yRatio: (parseFloat(toggle.style.top) || 0) / window.innerHeight,
     };
     try { localStorage.setItem(TOGGLE_POS_KEY, JSON.stringify(togglePos)); } catch (e) {}
-    placeToggle();   // 가까운 가장자리로 착 붙기 (CSS transition)
+    placeToggle();   // 놓은 자리 그대로 (라벨 방향만 갱신)
   };
   toggle.addEventListener('pointerup', endDrag);
   toggle.addEventListener('pointercancel', endDrag);
