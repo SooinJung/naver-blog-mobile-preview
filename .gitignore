@@ -11,3 +11,6 @@ reference/
 # 비교 도구가 긁어온 실제 블로그 원본 & 생성물 (제3자 콘텐츠·대용량, 배포 불필요)
 test/raw/
 test/preview-test.html
+
+# 웹스토어 업로드용 zip
+dist/
