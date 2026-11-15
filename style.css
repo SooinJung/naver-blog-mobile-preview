@@ -549,13 +549,33 @@
 }
 
 /* ── 플로팅 재열기 버튼 ── */
+/* 플로팅 재열기 버튼: 앱 아이콘 모양, 끌어서 옮기기 가능 (위치는 JS placeToggle) */
 #mobile-preview-toggle {
-  position: fixed; top: 80px; right: 20px;
-  width: 44px; height: 44px; background: #03C75A; color: white;
-  border: none; border-radius: 50%; font-size: 20px; cursor: pointer;
-  z-index: 10000; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  position: fixed; top: auto; right: auto;
+  width: 52px; height: 52px; margin: 0; padding: 0;
+  border: 0; border-radius: 15px; background: transparent;
+  cursor: grab; touch-action: none; user-select: none;
+  z-index: 10000;
   display: none; align-items: center; justify-content: center;
+  filter: drop-shadow(0 6px 14px rgba(20, 90, 60, .28));
+  transition: left .25s cubic-bezier(.2,.8,.2,1), top .25s cubic-bezier(.2,.8,.2,1), transform .15s ease, filter .15s ease;
 }
+#mobile-preview-toggle svg { width: 100%; height: 100%; display: block; pointer-events: none; }
+#mobile-preview-toggle:hover { transform: translateY(-2px) scale(1.04); filter: drop-shadow(0 10px 18px rgba(20, 90, 60, .34)); }
+#mobile-preview-toggle:focus-visible { outline: 3px solid #2FBF8F; outline-offset: 3px; }
+#mobile-preview-toggle.dragging { cursor: grabbing; transition: none; transform: scale(1.08); }
+
+.pv-toggle-label {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  white-space: nowrap; pointer-events: none;
+  background: #1F2A27; color: #fff; border-radius: 8px; padding: 7px 10px;
+  font: 600 12px/1 -apple-system, "Apple SD Gothic Neo", sans-serif;
+  opacity: 0; transition: opacity .15s ease;
+}
+#mobile-preview-toggle[data-side="right"] .pv-toggle-label { right: calc(100% + 10px); }
+#mobile-preview-toggle[data-side="left"]  .pv-toggle-label { left: calc(100% + 10px); }
+#mobile-preview-toggle:hover .pv-toggle-label { opacity: 1; }
+#mobile-preview-toggle.dragging .pv-toggle-label { opacity: 0; }
 
 /* ════════════════════════════════════════════
    SE4 컴포넌트 확장 스타일

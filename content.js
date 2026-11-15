@@ -138,18 +138,73 @@ function createPanel() {
   applyDevice(panel, device);
   window.addEventListener('resize', () => applyDevice(panel, device));
 
-  // 플로팅 재열기 버튼
+  // 플로팅 재열기 버튼 (패널을 닫으면 나타남)
+  //  - 끌어서 옮길 수 있고, 놓으면 가까운 왼쪽/오른쪽 가장자리에 붙는다. 위치는 저장.
+  //  - 기본 위치는 오른쪽 아래 (위쪽은 네이버 에디터 툴바를 가림)
   const toggle = document.createElement('button');
   toggle.id = 'mobile-preview-toggle';
-  toggle.innerHTML = '📱';
-  toggle.title = 'Blobile 모바일 미리보기 열기';
+  toggle.type = 'button';
+  toggle.setAttribute('aria-label', '모바일 미리보기 열기');
+  toggle.innerHTML = '<svg viewBox="0 0 128 128"><defs><linearGradient id="pvToggleGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B4EC51"/><stop offset="1" stop-color="#2FBF8F"/></linearGradient></defs><rect width="128" height="128" rx="28" fill="url(#pvToggleGrad)"/><rect x="14" y="30" width="62" height="50" rx="8" fill="#fff" opacity=".3"/><rect x="22" y="41" width="30" height="5" rx="2.5" fill="#fff" opacity=".9"/><rect x="22" y="52" width="40" height="5" rx="2.5" fill="#fff" opacity=".6"/><rect x="22" y="63" width="24" height="5" rx="2.5" fill="#fff" opacity=".6"/><rect x="58" y="26" width="52" height="86" rx="13" fill="#fff"/><rect x="77" y="31" width="14" height="3.5" rx="1.75" fill="#DDE5D6"/><rect x="65" y="41" width="38" height="25" rx="5" fill="#E3F7D2"/><circle cx="74" cy="50" r="3.5" fill="#7FD36B"/><path d="M67 64 L77 55 L84 61 L90 56 L101 64 Z" fill="#7FD36B"/><rect x="65" y="73" width="30" height="4.5" rx="2.25" fill="#1F6F55"/><rect x="65" y="83" width="38" height="4.5" rx="2.25" fill="#CFDCD3"/><rect x="65" y="93" width="24" height="4.5" rx="2.25" fill="#CFDCD3"/><circle cx="106" cy="28" r="11" fill="#2FBF8F"/><circle cx="106" cy="28" r="6.5" fill="#FFFFFF"/></svg><span class="pv-toggle-label">미리보기 열기</span>';
   document.body.appendChild(toggle);
+
+  const TOGGLE_POS_KEY = 'mobilePreviewTogglePos';
+  const TOGGLE_MARGIN = 16;
+  let togglePos = { side: 'right', yRatio: null };   // yRatio: 창 높이 대비 위치 (창 크기가 바뀌어도 비슷한 자리)
+  try { togglePos = Object.assign(togglePos, JSON.parse(localStorage.getItem(TOGGLE_POS_KEY) || '{}')); } catch (e) {}
+
+  function placeToggle() {
+    if (toggle.style.display === 'none' || !toggle.style.display) return;
+    const size = toggle.offsetWidth || 52;
+    const maxY = window.innerHeight - size - TOGGLE_MARGIN;
+    const y = togglePos.yRatio == null ? maxY - 96 : togglePos.yRatio * window.innerHeight;
+    toggle.style.top = Math.round(Math.min(Math.max(y, TOGGLE_MARGIN), maxY)) + 'px';
+    toggle.style.left = (togglePos.side === 'left' ? TOGGLE_MARGIN : window.innerWidth - size - TOGGLE_MARGIN) + 'px';
+    toggle.dataset.side = togglePos.side;
+  }
+  window.addEventListener('resize', placeToggle);
+
+  // 끌기: 5px 이상 움직이면 드래그로 보고, 그때는 클릭(패널 열기)을 막는다
+  let drag = null, dragged = false;
+  toggle.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const r = toggle.getBoundingClientRect();
+    drag = { x0: e.clientX, y0: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top };
+    dragged = false;
+    try { toggle.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  toggle.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!dragged && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 5) return;
+    dragged = true;
+    toggle.classList.add('dragging');
+    const size = toggle.offsetWidth;
+    toggle.style.left = Math.min(Math.max(e.clientX - drag.dx, 0), window.innerWidth - size) + 'px';
+    toggle.style.top = Math.min(Math.max(e.clientY - drag.dy, 0), window.innerHeight - size) + 'px';
+  });
+  const endDrag = () => {
+    if (!drag) return;
+    drag = null;
+    toggle.classList.remove('dragging');
+    if (!dragged) return;
+    const r = toggle.getBoundingClientRect();
+    togglePos = {
+      side: r.left + r.width / 2 < window.innerWidth / 2 ? 'left' : 'right',
+      yRatio: r.top / window.innerHeight,
+    };
+    try { localStorage.setItem(TOGGLE_POS_KEY, JSON.stringify(togglePos)); } catch (e) {}
+    placeToggle();   // 가까운 가장자리로 착 붙기 (CSS transition)
+  };
+  toggle.addEventListener('pointerup', endDrag);
+  toggle.addEventListener('pointercancel', endDrag);
 
   document.getElementById('mobile-preview-close').addEventListener('click', () => {
     panel.style.display = 'none';
     toggle.style.display = 'flex';
+    placeToggle();
   });
-  toggle.addEventListener('click', () => {
+  toggle.addEventListener('click', e => {
+    if (dragged) { dragged = false; e.preventDefault(); return; }   // 방금 끌었던 거면 열지 않음
     panel.style.display = 'flex';
     toggle.style.display = 'none';
     applyDevice(panel, device);
