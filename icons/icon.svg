@@ -1,17 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"><defs><linearGradient id="gL3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B4EC51"/><stop offset="1" stop-color="#2FBF8F"/></linearGradient></defs>
-  <rect width="128" height="128" rx="28" fill="url(#gL3)"/>
-  <rect x="14" y="30" width="62" height="50" rx="8" fill="#fff" opacity=".3"/>
-  <rect x="22" y="41" width="30" height="5" rx="2.5" fill="#fff" opacity=".9"/>
-  <rect x="22" y="52" width="40" height="5" rx="2.5" fill="#fff" opacity=".6"/>
-  <rect x="22" y="63" width="24" height="5" rx="2.5" fill="#fff" opacity=".6"/>
-  <rect x="58" y="26" width="52" height="86" rx="13" fill="#fff"/>
-  <rect x="77" y="31" width="14" height="3.5" rx="1.75" fill="#DDE5D6"/>
-  <rect x="65" y="41" width="38" height="25" rx="5" fill="#E3F7D2"/>
-  <circle cx="74" cy="50" r="3.5" fill="#7FD36B"/>
-  <path d="M67 64 L77 55 L84 61 L90 56 L101 64 Z" fill="#7FD36B"/>
-  <rect x="65" y="73" width="30" height="4.5" rx="2.25" fill="#1F6F55"/>
-  <rect x="65" y="83" width="38" height="4.5" rx="2.25" fill="#CFDCD3"/>
-  <rect x="65" y="93" width="24" height="4.5" rx="2.25" fill="#CFDCD3"/>
-  <circle cx="106" cy="28" r="11" fill="#2FBF8F"/>
-  <circle cx="106" cy="28" r="6.5" fill="#FFFFFF"/>
-  </svg>
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" width="128" height="128"><defs><clipPath id="ci"><rect width="128" height="128" rx="28"/></clipPath></defs><g clip-path="url(#ci)"><rect width="128" height="128" fill="#fff"/><circle cx="64" cy="116" r="58" fill="#1F5A3A"/><ellipse cx="49.00" cy="86.00" rx="12" ry="16" fill="#fff"/><circle cx="48.24" cy="80.96" r="6.72" fill="#1B1A17"/><circle cx="45.89" cy="78.41" r="2.15" fill="#fff"/><ellipse cx="79.00" cy="86.00" rx="12" ry="16" fill="#fff"/><circle cx="78.24" cy="80.96" r="6.72" fill="#1B1A17"/><circle cx="75.89" cy="78.41" r="2.15" fill="#fff"/></g><rect x=".75" y=".75" width="126.5" height="126.5" rx="27.4" fill="none" stroke="#E6E8E6" stroke-width="1.5"/></svg>
