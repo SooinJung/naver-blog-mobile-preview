@@ -92,60 +92,88 @@
   font-family: se-pretendard, Pretendard, arial, sans-serif !important;
 }
 
-/* ── 패널 전체 ── */
+/* ── 패널 전체: 위 툴바 + 아래 진초록 폰 (패널 자체는 투명한 틀) ── */
 #mobile-preview-panel {
   position: fixed;
   top: 60px;
   right: 20px;
-  /* 높이는 #phone-screen(기기 화면 높이, JS applyDevice) + 컨트롤 바로 결정.
+  /* 높이는 툴바 + #phone-screen(기기 화면 높이, JS applyDevice) + 테두리로 결정.
      창이 더 낮으면 JS가 transform: scale 로 축소 → 오른쪽 위 기준으로 줄어들게 */
   transform-origin: top right;
-  background: #fff;
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.22);
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  gap: 10px;
+  font-family: -apple-system, "Apple SD Gothic Neo", sans-serif;
   transition: width 0.2s ease, transform 0.2s ease;
 }
 
-/* ── 컨트롤 바 (익스텐션 자체 UI — 폰 화면 밖) ── */
-#mobile-preview-header {
-  background: #f8f8f8;
-  color: #333;
-  padding: 7px 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  border-bottom: 1px solid #e0e0e0;
+/* ── 상단 툴바 (폰과 같은 폭, 흰 알약) ── */
+#mobile-preview-header.pv-toolbar {
+  height: 44px; box-sizing: border-box;
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 8px 0 12px;
+  background: #fff; border-radius: 22px;
+  box-shadow: 0 6px 18px rgba(16, 52, 33, .14), 0 0 0 1px rgba(16, 52, 33, .05);
+  color: #16241D; flex-shrink: 0;
 }
-#mobile-preview-title { font-size: 11px; font-weight: 600; flex: 1; color: #555; }
-#mobile-preview-device {
-  font-size: 10px; padding: 3px 5px; border-radius: 5px;
-  border: 1px solid #ddd; background: #fff; color: #333;
-  cursor: pointer; max-width: 130px;
+.pv-brand { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; }
+.pv-brand svg { width: 22px; height: 22px; flex-shrink: 0; display: block; }
+.pv-brand b { font-size: 13px; font-weight: 800; color: #1F5A3A; letter-spacing: -.2px; }
+
+/* 칩 모양 select (기기·광고) */
+.pv-select { position: relative; display: inline-flex; flex-shrink: 0; }
+.pv-select select {
+  -webkit-appearance: none; appearance: none;
+  height: 28px; padding: 0 26px 0 12px; margin: 0;
+  border: 0; border-radius: 14px; background: #F1F5F2; color: #16241D;
+  font: 600 12px/28px -apple-system, "Apple SD Gothic Neo", sans-serif;
+  cursor: pointer; outline: none; max-width: 150px;
 }
-#mobile-preview-device option { background: #fff; color: #333; }
-#mobile-preview-ad {
-  font-size: 10px; padding: 3px 5px; border-radius: 5px;
-  border: 1px solid #ddd; background: #fff; color: #333;
-  cursor: pointer; max-width: 96px;
+.pv-select select:hover { background: #E6EEE8; }
+.pv-select select:focus-visible { box-shadow: 0 0 0 2px #1F5A3A; }
+.pv-select::after {
+  content: ""; position: absolute; right: 11px; top: 50%; width: 5px; height: 5px; margin-top: -4px;
+  border-right: 1.6px solid #1F5A3A; border-bottom: 1.6px solid #1F5A3A; transform: rotate(45deg);
+  pointer-events: none;
 }
-#preview-scan-btn {
-  background: #e8e8e8; border: none; color: #555;
-  font-size: 13px; width: 20px; height: 20px; border-radius: 50%;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
+.pv-select-sm select { height: 26px; line-height: 26px; font-size: 11.5px; padding: 0 24px 0 10px; }
+
+/* 아이콘 버튼 (더보기·닫기) */
+.pv-icon-btn {
+  width: 28px; height: 28px; padding: 0; margin: 0; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 14px; background: transparent; color: #1F5A3A; cursor: pointer;
 }
-#preview-scan-btn:hover { background: #d0d0d0; }
-#preview-scan-btn:disabled { opacity: 0.5; cursor: default; }
-#mobile-preview-close {
-  background: #e8e8e8; border: none; color: #555;
-  font-size: 11px; width: 20px; height: 20px; border-radius: 50%;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
+.pv-icon-btn svg { width: 16px; height: 16px; display: block; }
+.pv-icon-btn:hover, .pv-icon-btn[aria-expanded="true"] { background: #F1F5F2; }
+.pv-icon-btn:focus-visible { outline: 2px solid #1F5A3A; outline-offset: 1px; }
+
+/* 더보기 메뉴 */
+.pv-more-wrap { position: relative; display: inline-flex; }
+.pv-menu {
+  position: absolute; top: calc(100% + 8px); right: -6px; width: 232px; z-index: 2;
+  background: #fff; border-radius: 14px; padding: 6px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .18), 0 0 0 1px rgba(0, 0, 0, .04);
 }
-#mobile-preview-close:hover { background: #d0d0d0; }
+.pv-menu[hidden] { display: none; }
+.pv-menu-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; height: 40px; box-sizing: border-box;
+  padding: 0 8px 0 10px; margin: 0; border: 0; border-radius: 9px; background: transparent;
+  font: 500 13px -apple-system, "Apple SD Gothic Neo", sans-serif; color: #16241D; text-align: left; cursor: pointer;
+}
+.pv-menu-item > span:first-of-type { flex: 1; }
+.pv-menu-item svg { width: 16px; height: 16px; color: #1F5A3A; flex-shrink: 0; }
+.pv-menu-item:hover { background: #F1F5F2; }
+.pv-menu-item:disabled { opacity: .55; cursor: default; }
+.pv-menu-sep { height: 1px; background: #E3E8E4; margin: 4px 6px; }
+
+/* ── 폰: 얇은 진초록 테두리 (두께 = content.js PV_BEZEL) ── */
+#pv-device {
+  padding: 5px; border-radius: 32px; background: #1F5A3A;
+  box-shadow: 0 20px 44px rgba(16, 52, 33, .28);
+}
+#pv-device #phone-screen { border-radius: 27px; }
 
 /* ── 폰 화면 전체 ── */
 #phone-screen {
@@ -159,19 +187,6 @@
 /* 아래 상단·하단 바 수치는 실제 iPhone(393×852) 네이버 앱 캡처에서 실측 (CSS px) */
 /* (시간·배터리 상태바는 그리지 않음 — 폰 화면 높이에서 statusBar 만큼 빼서 본문 노출량은 실제와 동일) */
 
-/* 인앱 브라우저 주소줄: (실제 화면 기준 54–78px) + 하단선 #f5f5f5 */
-.phone-url-bar {
-  position: relative;
-  height: 25px;                /* border-box: 24px + 하단선 1px */
-  padding-top: 4px;            /* 글자 중심 y≈68 */
-  box-sizing: border-box;
-  display: flex; align-items: center; justify-content: center;
-  font-family: -apple-system, sans-serif;
-  font-size: 13.5px; color: #888;
-  border-bottom: 1px solid #f5f5f5;
-  flex-shrink: 0;
-}
-.phone-url-close { position: absolute; right: 16px; top: 8.5px; }
 
 /* 블로그 헤더: 79–140px(61px) + 하단선 #c4c4c4
    로고 x20 · 목록아이콘 x118 · 블로그명 x147 · 우측 아이콘 x311 / x352 */
@@ -571,7 +586,7 @@
   background: #1F5A3A;   /* 아이콘·버튼과 같은 진초록 단색 */
   box-shadow: 0 14px 40px rgba(16, 52, 33, .28);
 }
-#pv-morph .pv-morph-screen { position: absolute; inset: 8px 4px; background: #fff; border-radius: 5px; }
+#pv-morph .pv-morph-screen { position: absolute; inset: 5px; background: #fff; border-radius: inherit; }
 
 .pv-toggle-label {
   position: absolute; top: 50%; transform: translateY(-50%);

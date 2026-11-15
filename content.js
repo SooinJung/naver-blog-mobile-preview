@@ -26,14 +26,20 @@ function getSavedDevice() {
 
 // 패널을 기기 화면 크기(폭·높이)에 맞춘다.
 // 브라우저 창이 기기보다 낮으면 레이아웃(줄바꿈 등)은 그대로 두고 통째로 축소해서 보여준다.
+// 폰 테두리 두께 (style.css #pv-device padding 과 같아야 함)
+const PV_BEZEL = 5;
+
 function applyDevice(panel, device) {
-  panel.style.width = device.width + 'px';
+  panel.style.width = (device.width + PV_BEZEL * 2) + 'px';
   panel.querySelector('#phone-screen').style.height = (device.height - device.statusBar) + 'px';
   if (panel.style.display === 'none') return;   // 닫힌 상태에선 크기 측정 불가 → 열 때 다시 호출
   const avail = window.innerHeight - panel.offsetTop - 20;
   const scale = Math.min(1, avail / panel.offsetHeight);   // offsetHeight 는 transform 영향 없음
   panel.style.transform = scale < 1 ? `scale(${scale})` : '';
 }
+
+// 툴바 왼쪽 작은 마리모 (icons/icon.svg 와 동일)
+const PV_BRAND_ICON = '<svg viewBox="0 0 128 128"><defs><clipPath id="pvBrandClip"><rect width="128" height="128" rx="28"/></clipPath></defs><g clip-path="url(#pvBrandClip)"><rect width="128" height="128" fill="#fff"/><circle cx="64" cy="116" r="58" fill="#1F5A3A"/><ellipse cx="49.00" cy="86.00" rx="12" ry="16" fill="#fff"/><circle cx="48.24" cy="80.96" r="6.72" fill="#1B1A17"/><circle cx="45.89" cy="78.41" r="2.15" fill="#fff"/><ellipse cx="79.00" cy="86.00" rx="12" ry="16" fill="#fff"/><circle cx="78.24" cy="80.96" r="6.72" fill="#1B1A17"/><circle cx="75.89" cy="78.41" r="2.15" fill="#fff"/></g><rect x=".75" y=".75" width="126.5" height="126.5" rx="27.4" fill="none" stroke="#E6E8E6" stroke-width="1.5"/></svg>';
 
 function createPanel() {
   // option value 는 기기 이름 (폭이 같은 기기가 여럿이라 폭으로는 구분 불가)
@@ -58,23 +64,35 @@ function createPanel() {
   const panel = document.createElement('div');
   panel.id = 'mobile-preview-panel';
   panel.innerHTML = `
-    <!-- 컨트롤 바 -->
-    <div id="mobile-preview-header">
-      <span id="mobile-preview-title">모리뷰</span>
-      <select id="mobile-preview-device">${deviceOptions}</select>
-      <select id="mobile-preview-ad" title="본문 광고 자리 (네이버 애드포스트)">${adOptions}</select>
-      <button id="preview-scan-btn" title="전체 이미지 재스캔">⟳</button>
-      <button id="mobile-preview-close">✕</button>
+    <!-- 상단 툴바 (폰 밖, 폰과 같은 폭) : 브랜드 · 기기 · 더보기(광고 표시·새로고침) · 닫기 -->
+    <div id="mobile-preview-header" class="pv-toolbar">
+      <span id="mobile-preview-title" class="pv-brand">${PV_BRAND_ICON}<b>모리뷰</b></span>
+      <span class="pv-select"><select id="mobile-preview-device" aria-label="기기 선택">${deviceOptions}</select></span>
+      <span class="pv-more-wrap">
+        <button type="button" id="pv-more-btn" class="pv-icon-btn" aria-label="더보기" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="12.5" cy="8" r="1.4" fill="currentColor"/></svg>
+        </button>
+        <div id="pv-more-menu" class="pv-menu" role="menu" hidden>
+          <label class="pv-menu-item">
+            <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 10l1.5-4 1.5 4M5.5 8.8h2M10 6v4h.8a1.6 2 0 0 0 0-4z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            <span>광고 자리 표시</span>
+            <span class="pv-select pv-select-sm"><select id="mobile-preview-ad" title="본문 광고 자리 (네이버 애드포스트)">${adOptions}</select></span>
+          </label>
+          <div class="pv-menu-sep"></div>
+          <button type="button" id="preview-scan-btn" class="pv-menu-item" role="menuitem" title="에디터 전체를 다시 읽어 와요 (기존 글 수정 시 사진이 빠졌을 때)">
+            <svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13 2.6v2.8h-2.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="pv-scan-label">미리보기 새로고침</span>
+          </button>
+        </div>
+      </span>
+      <button type="button" id="mobile-preview-close" class="pv-icon-btn" aria-label="미리보기 닫기">
+        <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
     </div>
 
-    <!-- 폰 화면 -->
+    <!-- 폰 (진초록 테두리) -->
+    <div id="pv-device">
     <div id="phone-screen">
-
-      <!-- 네이버 앱 인앱 브라우저 주소줄 -->
-      <div class="phone-url-bar">
-        <span>blog.naver.com</span>
-        <svg class="phone-url-close" width="9" height="9" viewBox="0 0 9 9" stroke="#222" stroke-width="1.2"><path d="M.5.5l8 8M8.5.5l-8 8"/></svg>
-      </div>
 
       <!-- 네이버 블로그 모바일 헤더 (로고 · 가운데 목록+블로그명 · 우측 아이콘) -->
       <div class="naver-blog-appbar">
@@ -132,6 +150,7 @@ function createPanel() {
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 10a8.5 8.5 0 1 1-2.5-6"/><path d="M17 1v4.5h-4.5"/></svg>
         <svg width="22" height="14" viewBox="0 0 22 14" stroke="#111" stroke-width="2" stroke-linecap="round"><path d="M1 1h20M1 7h20M1 13h20"/></svg>
       </div>
+    </div>
     </div>
   `;
   document.body.appendChild(panel);
@@ -219,7 +238,8 @@ function createPanel() {
     document.body.appendChild(m);
     return m;
   };
-  const panelRadius = () => 20 * ((panel.getBoundingClientRect().width / panel.offsetWidth) || 1);   // applyDevice 축소 반영
+  const deviceEl = () => panel.querySelector('#pv-device') || panel;
+  const panelRadius = () => 32 * ((panel.getBoundingClientRect().width / panel.offsetWidth) || 1);   // 폰 바깥 모서리 × applyDevice 축소 배율
 
   async function openPanel() {
     if (animating) return;
@@ -234,7 +254,7 @@ function createPanel() {
     const done = () => { panel.style.opacity = ''; panel.style.transition = prevTransition; animating = false; };
     if (reduceMotion() || !panel.animate) { done(); return; }
     animating = true;
-    const to = panel.getBoundingClientRect();
+    const to = deviceEl().getBoundingClientRect();
     const morph = makeMorph(from, 10);
     try {
       await morph.animate([box(from, 10), box(to, panelRadius())], { duration: 380, easing: EASE, fill: 'forwards' }).finished;
@@ -250,7 +270,7 @@ function createPanel() {
 
   async function closePanel() {
     if (animating) return;
-    const from = panel.getBoundingClientRect();
+    const from = deviceEl().getBoundingClientRect();
     const radius = panelRadius();
     // 버튼이 놓일 자리를 미리 잰다 (안 보이게 배치)
     toggle.style.visibility = 'hidden';
@@ -278,7 +298,17 @@ function createPanel() {
     finish();
   }
 
-  document.getElementById('mobile-preview-close').addEventListener('click', closePanel);
+  // 더보기(⋯) 메뉴: 버튼으로 열고, 바깥 클릭·Esc·항목 실행 시 닫기
+  const moreBtn = document.getElementById('pv-more-btn');
+  const moreMenu = document.getElementById('pv-more-menu');
+  const setMenu = open => { moreMenu.hidden = !open; moreBtn.setAttribute('aria-expanded', String(open)); };
+  moreBtn.addEventListener('click', e => { e.stopPropagation(); setMenu(moreMenu.hidden); });
+  moreMenu.addEventListener('click', e => e.stopPropagation());
+  document.addEventListener('click', () => setMenu(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+  document.getElementById('preview-scan-btn').addEventListener('click', () => setTimeout(() => setMenu(false), 150));
+
+  document.getElementById('mobile-preview-close').addEventListener('click', () => { setMenu(false); closePanel(); });
   toggle.addEventListener('click', e => {
     if (dragged) { dragged = false; e.preventDefault(); return; }   // 방금 끌었던 거면 열지 않음
     openPanel();
@@ -1232,11 +1262,11 @@ function buildPreviewSrcdoc(sourceDoc, opts) {
 //   둘 다: 하단 + (#viewTypeSelector 높이 > 2700 일 때만) 30% 앞·60% 앞 두 곳
 //   광고 칸 CSS: .ssp_adcontent { padding: 30px 20px 0 }
 const AD_MODES = [
-  { value: 'auto',   label: '광고: 자동' },
-  { value: 'none',   label: '광고 없음' },
-  { value: 'middle', label: '광고: 중간' },
-  { value: 'bottom', label: '광고: 하단' },
-  { value: 'both',   label: '광고: 중간+하단' },
+  { value: 'auto',   label: '자동' },
+  { value: 'none',   label: '없음' },
+  { value: 'middle', label: '중간' },
+  { value: 'bottom', label: '하단' },
+  { value: 'both',   label: '중간+하단' },
 ];
 let adModeSetting = (() => { try { return localStorage.getItem('mobilePreviewAd') || 'auto'; } catch (e) { return 'auto'; } })();
 let adModeDetected = null;   // 'auto' 일 때 쓸 값 (fetchAdSetting 결과)
@@ -1719,7 +1749,8 @@ function initCarousels() {
 // 이후 getBodyHTML()이 전체 이미지를 읽을 수 있음.
 async function scanEditorContent() {
   const btn = document.getElementById('preview-scan-btn');
-  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  const lbl = btn && btn.querySelector('.pv-scan-label');
+  if (btn) { btn.disabled = true; if (lbl) lbl.textContent = '새로고침 중…'; }
 
   const editorDoc = getIframeDoc();
 
@@ -1746,7 +1777,7 @@ async function scanEditorContent() {
   }
 
   updatePreview();
-  if (btn) { btn.textContent = '⟳'; btn.disabled = false; }
+  if (btn) { btn.disabled = false; if (lbl) lbl.textContent = '미리보기 새로고침'; }
 }
 
 // 이미 옵저버를 붙인 문서 (중복 부착 방지 — 폴링 중 매 틱 호출되므로 필수)
@@ -1853,7 +1884,7 @@ function init() {
     adModeDetected = mode;
     const opt = document.querySelector('#mobile-preview-ad option[value="auto"]');
     const lbl = (AD_MODES.find(m => m.value === mode) || {}).label || '';
-    if (opt) opt.textContent = '광고: 자동(' + lbl.replace(/^광고:? ?/, '') + ')';
+    if (opt) opt.textContent = '자동 · ' + lbl;
     if (adModeSetting === 'auto') updatePreview();
   });
   // 블로그 이름은 글쓰기 페이지 제목에 없는 경우가 많아 닉네임이 있어도 fetch 한다
