@@ -99,11 +99,12 @@ function createPanel() {
 
       <!-- 공감·댓글·공유 (실측 51px) -->
       <div class="post-action-bar">
+        <!-- 하트: 양쪽 둥근 윗부분이 viewBox(0~22) 안에 들어오게 그린 경로 (예전 경로는 호가 y<0 으로 넘쳐 위가 잘림) -->
         <svg width="26" height="22" viewBox="0 0 26 22" fill="none" stroke="#222" stroke-width="1.7" stroke-linejoin="round">
-          <path d="M13 21S1 13.6 1 6.8A5.8 5.8 0 0 1 13 4a5.8 5.8 0 0 1 12 2.8C25 13.6 13 21 13 21z"/>
+          <path d="M13 20.6C13 20.6 1.5 13.8 1.5 7.3C1.5 4 4 1.5 7.2 1.5C9.6 1.5 11.9 2.9 13 5C14.1 2.9 16.4 1.5 18.8 1.5C22 1.5 24.5 4 24.5 7.3C24.5 13.8 13 20.6 13 20.6Z"/>
         </svg>
         <span class="action-like">
-          <svg width="15" height="13" viewBox="0 0 26 22" fill="#f25a7c"><path d="M13 21S1 13.6 1 6.8A5.8 5.8 0 0 1 13 4a5.8 5.8 0 0 1 12 2.8C25 13.6 13 21 13 21z"/></svg>
+          <svg width="15" height="13" viewBox="0 0 26 22" fill="#f25a7c"><path d="M13 20.6C13 20.6 1.5 13.8 1.5 7.3C1.5 4 4 1.5 7.2 1.5C9.6 1.5 11.9 2.9 13 5C14.1 2.9 16.4 1.5 18.8 1.5C22 1.5 24.5 4 24.5 7.3C24.5 13.8 13 20.6 13 20.6Z"/></svg>
           <span>10</span>
         </span>
         <svg class="action-comment" width="23" height="23" viewBox="0 0 23 23" fill="none" stroke="#222" stroke-width="1.7">
@@ -637,6 +638,11 @@ function mobilizeTables(root) {
 function stripEditorUI(root) {
   const sel = [
     'button', 'script', 'style', 'noscript',
+    'textarea',   // 코드 블록 편집 중 입력창("내용을 입력하세요.") 등 — 발행 글 본문엔 없음
+    // 에디터가 편집 UI 에 붙이는 표시(__se-cursor-unrelated): 툴바 자리·표 행/열 선택 막대·표 우클릭 메뉴 등.
+    // 표 선택 막대는 버튼만 지우면 높이 45px 칸들이 남아 표 위에 큰 공백이 생김 (2026-11-15)
+    '.__se-cursor-unrelated', '.se-table-control', '.se-cell-controlbar', '.se-cell-context-menu',
+    '.se-component-edge-button',
     '.se-blind', '.se-placeholder', '.se-placeholderText', '.se-placeholder-text',
     '.se-controls', '.se-control', '.se-control-panel',
     '.se-section-control', '.se-component-control',
@@ -645,6 +651,138 @@ function stripEditorUI(root) {
     '.se-tooltip', '.se-help', '.se-guide', '.se-guideline',
   ].join(',');
   root.querySelectorAll(sel).forEach(el => { try { el.remove(); } catch (e) {} });
+  stripEditorOnlyTexts(root);
+}
+
+// 클래스명으로 못 거르는 에디터 전용 문구 (발행 글에는 안 나옴).
+//   'AI 활용 설정' = 사진 아래 붙는 AI 사용 표시 설정 링크 (2026-11 확인, 클래스명 미확인이라 문구로 찾음)
+// 이 문구만 담은 가장 바깥 요소를 통째로 지워 빈 여백이 남지 않게 한다.
+// (실제로 AI 표시를 켠 사진의 뷰어 배지 .se-ai-tooltip-container 는 문구가 달라 영향 없음)
+const EDITOR_ONLY_TEXTS = ['AI 활용 설정'];
+function stripEditorOnlyTexts(root) {
+  const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+  const isHit = el =>
+    EDITOR_ONLY_TEXTS.includes(norm(el.textContent)) &&
+    !el.querySelector('img, video, iframe') &&
+    !el.matches('.se-component, .se-section, .se-module, .se-main-container');
+  const hits = [...root.querySelectorAll('*')].filter(isHit);
+  hits.filter(el => !(el.parentElement && isHit(el.parentElement)))
+      .forEach(el => { try { el.remove(); } catch (e) {} });
+}
+
+// 교차 출처 스타일시트 캐시: href → CSSStyleSheet | 'loading' | 'fail'
+// 처음엔 받아 오는 중이라 null 을 돌려주고, 다 받으면 미리보기를 다시 그린다.
+const crossSheetCache = new Map();
+function getCrossOriginRules(href) {
+  const c = crossSheetCache.get(href);
+  if (c instanceof CSSStyleSheet) return c.cssRules;
+  if (!c) {
+    crossSheetCache.set(href, 'loading');
+    fetch(href)
+      .then(r => (r.ok ? r.text() : Promise.reject(r.status)))
+      .then(text => {
+        // url(상대경로) 는 iframe 에선 기준 주소가 달라지므로 절대 주소로 바꿔 둔다.
+        // 단 data: SVG 안의 fill='url(%23a)' 같은 참조는 건드리면 아이콘이 깨짐 → 앞 글자가 ' = % 등이면 제외
+        text = text.replace(/(?<![\w'"%=-])url\(\s*(['"]?)(?!data:|https?:|\/\/|#|%23)([^'")]+)\1\s*\)/g,
+          (m, q, u) => { try { return `url("${new URL(u, href).href}")`; } catch (e) { return m; } });
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(text);
+        crossSheetCache.set(href, sheet);
+        debouncedUpdate();
+      })
+      .catch(() => crossSheetCache.set(href, 'fail'));
+  }
+  return null;
+}
+
+// ── 에디터 컴포넌트 → 발행 글 마크업 ──
+// 일부 컴포넌트는 글쓰기 중의 에디터 DOM 이 발행 글 DOM 과 구조가 달라서 뷰어 CSS 가 안 맞는다.
+// (발행하면 서버가 발행 구조로 저장하므로 발행 후엔 멀쩡함) 2026-11-15 실제 에디터 DOM 과 발행 DOM 을 비교해 맞춤.
+// 반환값: iframe 에 추가로 넣을 CSS (se-custom 용)
+function viewerizeEditorComponents(root, sourceDoc) {
+  const doc = root.ownerDocument;
+
+  // 코드: 에디터 = .se-code-source-highlighted > pre > code  +  .se-code-source-edit-mode > textarea(편집 입력창)
+  //       발행   = .se-code-source > div.__se_code_view.language-xxx
+  //       (뷰어 CSS 의 고정폭 글꼴·줄높이·white-space:pre 가 div[class*=language-] 에 걸려 있음)
+  root.querySelectorAll('.se-module-code').forEach(mod => {
+    const editBox = mod.querySelector('.se-code-source-edit-mode');
+    const typed = editBox && editBox.querySelector('textarea') ? editBox.querySelector('textarea').value : '';
+    let box = mod.querySelector('.se-code-source-highlighted');
+    const code = box && (box.querySelector('code') || box.querySelector('pre'));
+    const view = doc.createElement('div');
+    const lang = ((code && code.className.match(/language-[\w-]+/)) || [])[0] || 'language-javascript';
+    view.className = '__se_code_view ' + lang;
+    if (code && code.textContent.trim()) view.innerHTML = code.innerHTML;
+    else view.textContent = typed;            // 막 입력 중이라 색칠본이 아직 없으면 입력창 내용으로
+    if (!box) { box = doc.createElement('div'); mod.insertBefore(box, mod.firstChild); }
+    box.className = 'se-code-source';
+    box.removeAttribute('draggable');
+    box.replaceChildren(view);
+    if (editBox) editBox.remove();
+  });
+
+  // 파일: 에디터 = span.se-file-name("이름.png") 하나  →  발행 = div.se-file-name-container > 이름 + 확장자 + 다운로드 버튼
+  //       뷰어 CSS 가 .se-module-file 에 font-size:0 을 주고 container 에서만 13px 로 되살려서, 에디터 구조면 이름이 안 보임
+  root.querySelectorAll('.se-module-file').forEach(mod => {
+    const nameEl = mod.querySelector('.se-file-name');
+    if (!nameEl || mod.querySelector('.se-file-name-container')) return;
+    const full = nameEl.textContent.trim();
+    const dot = full.lastIndexOf('.');
+    const wrap = doc.createElement('div');
+    wrap.className = 'se-file-name-container';
+    wrap.innerHTML = `<span class="se-file-name">${escHtml(dot > 0 ? full.slice(0, dot) : full)}</span>` +
+      (dot > 0 ? `<span class="se-file-extension">${escHtml(full.slice(dot))}</span>` : '');
+    nameEl.replaceWith(wrap);
+    mod.querySelectorAll('.se-file-status-icon').forEach(el => el.remove());
+    if (!mod.querySelector('.se-file-save-button')) {
+      wrap.insertAdjacentHTML('afterend', '<a class="se-file-save-button"><span class="se-blind">파일 다운로드</span></a>');
+    }
+  });
+
+  // 책·영화 등 자료(material): 뷰어 CSS 는 표지 img 를 .se-image-loaded 가 붙어야 보여 줌 (원래 뷰어 스크립트가 로드 후 붙임)
+  root.querySelectorAll('.se-material-poster-inner').forEach(el => el.classList.add('se-image-loaded'));
+
+  // 일정: 에디터는 철자가 다른 클래스(expended)를 섹션에 붙임 → 발행 글은 모듈에 se-module-schedule-expanded
+  root.querySelectorAll('.se-section-schedule-expended').forEach(sec => {
+    const mod = sec.querySelector('.se-module-schedule');
+    if (mod) mod.classList.add('se-module-schedule-expanded');
+  });
+
+  // 블로그 맞춤 컴포넌트(se-custom, 예: 내돈내산 쇼핑 인증): 내용이 CSS 모듈 클래스(wrap__qsBL0 등)라
+  // 뷰어 CSS 에 없고, 에디터 문서에 로드된 블로그 스타일시트(feblog …/pc-pages-SEOnePage.*.css)에만 있다
+  // → 쓰인 클래스의 규칙만 골라 옮겨 온다.
+  // 크기 규칙은 ".se-l-viewport-mobile .thumbnail__…" 처럼 화면 종류 클래스 아래에만 있음 (모바일: 카드 폭 360, 썸네일 230)
+  root.querySelectorAll('.se-module-custom').forEach(el => el.classList.add('se-l-viewport-mobile'));
+  let css = '';
+  const customClasses = new Set();
+  root.querySelectorAll('.se-module-custom [class]').forEach(el => {
+    (typeof el.className === 'string' ? el.className : '').split(/\s+/).forEach(c => {
+      if (/__[A-Za-z0-9_-]{4,}$/.test(c)) customClasses.add(c);
+    });
+  });
+  if (customClasses.size && sourceDoc) {
+    const hit = sel => { for (const c of customClasses) if (sel.indexOf('.' + c) >= 0) return true; return false; };
+    const collect = rules => {
+      for (const r of rules) {
+        if (r.selectorText) { if (hit(r.selectorText)) css += r.cssText; }
+        else if (r.cssRules && r.media) {          // @media 안의 규칙
+          const before = css.length; let inner = '';
+          for (const ir of r.cssRules) if (ir.selectorText && hit(ir.selectorText)) inner += ir.cssText;
+          if (inner) css = css.slice(0, before) + `@media ${r.media.mediaText}{${inner}}`;
+        }
+      }
+    };
+    for (const sheet of sourceDoc.styleSheets) {
+      let rules = null;
+      try { rules = sheet.cssRules; } catch (e) {
+        // 다른 도메인(pstatic) 시트는 페이지에서 규칙을 못 읽음 → 파일을 직접 받아 파싱 (CORS * 허용됨)
+        rules = sheet.href ? getCrossOriginRules(sheet.href) : null;
+      }
+      if (rules) collect(rules);
+    }
+  }
+  return css;
 }
 
 // 에디터 DOM의 클래스명을 발행 뷰어 DOM 형태로 변환 (뷰어 CSS가 인식하도록)
@@ -784,6 +922,9 @@ function buildPreviewSrcdoc(sourceDoc, opts) {
   staticizeVideos(clone);
   mobilizeTables(clone);
 
+  // 글쓰기 중 에디터 구조 → 발행 글 구조 (코드·파일·자료·일정·맞춤 컴포넌트)
+  const extraCss = opts.isEditor ? viewerizeEditorComponents(clone, src) : '';
+
   // 에디터 전용 편집 UI 제거 (작성자 주입 전에 실행)
   stripEditorUI(clone);
 
@@ -840,6 +981,13 @@ function buildPreviewSrcdoc(sourceDoc, opts) {
     `.pv-ad-title{display:block;height:14px;width:70%;border-radius:3px;background:#eceef1}` +
     `.pv-ad-sub{font:12px/1.4 -apple-system,sans-serif;color:#999}` +
     `.pv-ad-sub b{font-weight:600;color:#666;margin-right:4px}` +
+    // 보기 전용: 링크·버튼은 전부 입력을 막고(클릭 시 iframe 이 다른 페이지로 넘어가는 것 방지),
+    // 사진 슬라이드와 진행바만 입력을 받는다 (enableImageSlides). 세로 휠은 막힌 곳·슬라이드 모두 바깥 패널로 넘어감.
+    `html{pointer-events:none}` +
+    `.se-imageGroup-viewer,.se-imageGroup-progress{pointer-events:auto}` +
+    `.se-imageGroup-viewer a{pointer-events:none}` +
+    `.se-imageGroup-viewer{cursor:grab}.se-imageGroup-viewer:active{cursor:grabbing}` +
+    extraCss.replace(/<\/style/gi, '') +
     `</style></head>` +
     `<body><div class="post_ct wrap_rabbit" id="viewTypeSelector">${inner}</div></body></html>`;
 }
@@ -933,8 +1081,109 @@ function insertAdSlots(doc, mode) {
   if (mid2 > 0 && mid2 !== mid1) comps[mid2].parentNode.insertBefore(makeAdSlot(doc, 'ad-content-2-portal'), comps[mid2]);
 }
 
+// ── 사진 슬라이드 (se-imageGroup se-l-slide) ──
+// 실제 모바일: 뷰어 청크 se.26(ImageGroupComponent + MovableCoord, editor-static 1.78.0)가
+//   · 드래그 = 손가락 따라 1:1 자유 스크롤 (칸 단위로 끊기지 않음, 관성 있음, 양 끝 bounce 0)
+//   · 진행바 thumb 폭 = 보이는 폭 / 전체 폭, left = (100 - thumb폭) × 스크롤 비율
+//   · 사진이 화면에 다 들어가면 진행바 숨김, 모바일에선 < > 버튼 제거
+//   · 진행바 thumb 도 잡고 끌 수 있음
+// 미리보기 iframe 은 스크립트가 막혀 있어 정지 화면이 된다 → 부모(이 content script)에서 같은 동작을 붙인다.
+//   스크롤 자체는 브라우저 기본 가로 스크롤 (트랙패드 두 손가락 = 폰 스와이프처럼 자유 스크롤 + 관성)
+//   마우스 드래그·진행바 드래그·진행바 갱신은 아래 리스너.
+// 진행바 높이(8+24px)가 생기므로 광고 위치 계산(insertAdSlots)보다 먼저 호출할 것.
+function enableImageSlides(doc) {
+  doc.querySelectorAll('.se-section-imageGroup.se-l-slide').forEach(section => {
+    if (section.dataset.pvSlide) return;
+    section.dataset.pvSlide = '1';
+    const view = section.querySelector('.se-imageGroup-viewer');
+    if (!view) return;
+    section.querySelectorAll('.se-imageGroup-navigation').forEach(el => el.remove());
+
+    // 발행 글엔 진행바 마크업이 있지만 에디터 DOM 엔 없을 수 있음 → 같은 마크업으로 만들어 네이버 CSS 적용
+    let progress = section.querySelector('.se-imageGroup-progress');
+    if (!progress) {
+      progress = doc.createElement('div');
+      progress.className = 'se-imageGroup-progress';
+      section.appendChild(progress);
+    }
+    let thumb = progress.querySelector('.se-imageGroup-thumb');
+    if (!thumb) {
+      thumb = doc.createElement('div');
+      thumb.className = 'se-imageGroup-thumb';
+      progress.appendChild(thumb);
+    }
+
+    // 에디터의 슬라이드도 같은 스크립트로 움직여서, 에디터에서 넘겨 본 위치가 container 의
+    // inline transform(translateX) / left 로 남아 복제된다 → 사진 줄이 왼쪽으로 밀린 채 시작해
+    // 오른쪽이 비고, 스크롤 폭 계산도 틀어져 진행바가 사라짐. 위치는 scrollLeft 로만 관리하므로 지운다.
+    const container = view.querySelector('.se-imageGroup-container');
+    if (container) { container.style.transform = ''; container.style.left = ''; }
+
+    // 네이버 CSS 는 transform 으로 움직이는 전제라 overflow:hidden → 기본 가로 스크롤로 바꾸고 스크롤바만 숨김
+    Object.assign(view.style, {
+      overflowX: 'auto', overflowY: 'hidden',
+      scrollbarWidth: 'none', overscrollBehaviorX: 'contain',
+    });
+    // 이미지를 끌면 브라우저 기본 "이미지 드래그"가 시작되는 것 방지 (네이버도 dragstart 막음)
+    view.querySelectorAll('img').forEach(img => { img.draggable = false; });
+
+    const maxScroll = () => view.scrollWidth - view.clientWidth;
+    const sync = () => {
+      const vw = view.clientWidth, cw = view.scrollWidth;
+      if (!vw || cw <= vw + 1) {          // 다 보임 → 진행바 숨김
+        progress.style.display = 'none';
+        return;
+      }
+      const tw = vw / cw * 100;
+      progress.style.display = 'block';
+      thumb.style.display = 'block';
+      thumb.style.width = tw + '%';
+      thumb.style.left = Math.min(Math.max((100 - tw) * view.scrollLeft / maxScroll(), 0), 100 - tw) + '%';
+    };
+    view.addEventListener('scroll', sync, { passive: true });
+    view.querySelectorAll('img').forEach(img => { if (!img.complete) img.addEventListener('load', sync); });
+
+    // 마우스로 끌기: 사진 영역은 끈 만큼 반대로, 진행바 thumb 은 막대 비율만큼 같은 방향으로
+    const bindDrag = (el, ratio) => {
+      let drag = null;
+      el.addEventListener('pointerdown', e => {
+        if (e.pointerType !== 'mouse' || e.button !== 0) return;   // 트랙패드·터치는 기본 스크롤
+        drag = { x: e.clientX, left: view.scrollLeft };
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
+        e.preventDefault();
+      });
+      el.addEventListener('pointermove', e => {
+        if (drag) view.scrollLeft = drag.left + (e.clientX - drag.x) * ratio();
+      });
+      const end = () => { drag = null; };
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+    };
+    bindDrag(view, () => -1);
+    bindDrag(thumb, () => {
+      const track = progress.clientWidth - thumb.offsetWidth;
+      return track > 0 ? maxScroll() / track : 0;
+    });
+
+    sync();
+  });
+}
+
+// 미리보기는 에디터가 바뀔 때마다 통째로 다시 그려진다 → 슬라이드를 넘겨 둔 위치가 매번 처음으로 돌아가지 않게 보관
+function saveSlidePositions(frame) {
+  try {
+    return [...frame.contentDocument.querySelectorAll('.se-section-imageGroup.se-l-slide .se-imageGroup-viewer')]
+      .map(v => v.scrollLeft);
+  } catch (e) { return []; }
+}
+function restoreSlidePositions(doc, positions) {
+  if (!positions || !positions.length) return;
+  doc.querySelectorAll('.se-section-imageGroup.se-l-slide .se-imageGroup-viewer')
+    .forEach((v, i) => { if (positions[i]) v.scrollLeft = positions[i]; });
+}
+
 // iframe 높이를 내부 콘텐츠에 맞춰 늘려 부모(#mobile-preview-body)가 통째로 스크롤되게 함
-function sizePreviewFrame(frame) {
+function sizePreviewFrame(frame, slidePositions) {
   const resize = () => {
     try {
       const d = frame.contentDocument;
@@ -943,6 +1192,10 @@ function sizePreviewFrame(frame) {
   };
   frame.onload = () => {
     // onload = 이미지까지 로드된 뒤 → 컴포넌트 높이가 확정된 상태에서 광고 위치 계산
+    try {
+      enableImageSlides(frame.contentDocument);
+      restoreSlidePositions(frame.contentDocument, slidePositions);
+    } catch (e) {}
     try { insertAdSlots(frame.contentDocument, currentAdMode()); } catch (e) {}
     resize(); setTimeout(resize, 300); setTimeout(resize, 1200);
   };
@@ -1075,7 +1328,7 @@ function updatePreview() {
     srcdoc = buildPreviewSrcdoc(getIframeDoc() || document, { isEditor: true, author });
   } catch (e) { console.log('[미리보기] 렌더 오류:', e); }
 
-  sizePreviewFrame(frame);
+  sizePreviewFrame(frame, saveSlidePositions(frame));
   if (srcdoc) {
     frame.srcdoc = srcdoc;
   } else {

@@ -321,9 +321,9 @@
   display: block;
   background: #fff;
   min-height: 80px;
-  /* 보기 전용: 클릭·호버·스크롤 이벤트를 전부 통과시켜 버튼/링크가 동작하지 않게 함.
+  /* 보기 전용은 iframe 안 CSS 에서 처리 (buildPreviewSrcdoc: html{pointer-events:none} + 사진 슬라이드만 허용).
+     여기서 iframe 전체를 pointer-events:none 으로 막으면 슬라이드도 못 넘김.
      (스크립트 실행은 iframe sandbox 로 차단) */
-  pointer-events: none;
 }
 
 #preview-content {
@@ -482,6 +482,7 @@
   font-family: -apple-system, sans-serif;
   font-size: 15px; color: #333;
 }
+.post-action-bar svg { flex-shrink: 0; overflow: visible; }   /* 좁은 폭에서 찌그러지거나 선 끝이 잘리지 않게 */
 .action-comment { margin-left: 20.5px; }
 .action-send    { margin-left: 23.5px; }
 
