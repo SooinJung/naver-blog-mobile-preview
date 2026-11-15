@@ -50,9 +50,14 @@ git clone https://github.com/SooinJung/naver-blog-mobile-preview.git
 ├── content.js      # 패널 생성, 에디터 감지, 미리보기 렌더
 ├── style.css       # 패널(폰 프레임) UI
 ├── PRIVACY.md      # 개인정보처리방침
+├── rules.json      # 심사 없이 반영하는 미리보기 보정 규칙 (RULES.md 참고)
 ├── icons/          # 아이콘 (icon.svg 가 원본, png 3종은 여기서 렌더)
 └── test/           # 실제 발행 글과 좌우 비교하는 오프라인 도구
 ```
+
+## 네이버가 바뀌어 깨졌을 때
+
+편집 UI가 새어 나오는 식의 깨짐은 `rules.json`만 고쳐 push하면 설치된 익스텐션에 6시간 안에 반영됩니다. 방법은 [RULES.md](RULES.md)에 있습니다.
 
 ## 디버그
 

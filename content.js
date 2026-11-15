@@ -670,6 +670,65 @@ function mobilizeTables(root) {
 // 글쓰기 에디터에만 있는 편집 UI(컨트롤 버튼·툴바·플레이스홀더·접근성 텍스트) 제거.
 // 발행 뷰어에는 없는 요소라 미리보기에 그대로 두면 "위치이동/제목/삭제/취소/확인" 같은
 // 정체불명 텍스트가 보인다.
+// ── 원격 규칙 (rules.json) ──
+// 네이버가 에디터를 바꿔 편집 UI 가 새어 나오는 식의 깨짐은 대부분 "이 요소를 지워라 / 이 클래스를 붙여라" 로 고쳐진다.
+// 이런 규칙을 GitHub 의 rules.json 에 데이터로 두고 받아 와서, 웹스토어 심사 없이 바로 반영한다.
+// ⚠️ 데이터만 받는다 (MV3 는 원격 코드 실행 금지). 형식이 틀린 항목은 sanitizeRules 가 버림.
+const REMOTE_RULES_URL = 'https://raw.githubusercontent.com/SooinJung/naver-blog-mobile-preview/main/rules.json';
+const REMOTE_RULES_STORE = 'mobilePreviewRules';
+const REMOTE_RULES_TTL = 6 * 60 * 60 * 1000;   // 6시간마다 새로 받음
+const REMOTE_RULES_SCHEMA = 1;                 // 이 익스텐션이 이해하는 rules.json 형식 버전
+
+function sanitizeRules(r) {
+  const out = { stripSelectors: [], stripTexts: [], addClass: [], extraCss: '' };
+  if (!r || typeof r !== 'object' || (r.schema || 1) > REMOTE_RULES_SCHEMA) return out;
+  const validSel = sel => {
+    if (typeof sel !== 'string' || !sel.trim() || sel.length > 300) return false;
+    try { document.createDocumentFragment().querySelector(sel); return true; } catch (e) { return false; }
+  };
+  if (Array.isArray(r.stripSelectors)) out.stripSelectors = r.stripSelectors.filter(validSel).slice(0, 200);
+  if (Array.isArray(r.stripTexts)) {
+    out.stripTexts = r.stripTexts.filter(t => typeof t === 'string' && t.trim() && t.length <= 100).slice(0, 100);
+  }
+  if (Array.isArray(r.addClass)) {
+    out.addClass = r.addClass
+      .filter(x => x && validSel(x.selector) && typeof x.add === 'string' && /^[\w-]+( [\w-]+)*$/.test(x.add.trim()))
+      .map(x => ({ selector: x.selector, add: x.add.trim().split(' ') }))
+      .slice(0, 100);
+  }
+  if (typeof r.extraCss === 'string') out.extraCss = r.extraCss.slice(0, 20000).replace(/<\/?\s*(style|script)/gi, '');
+  return out;
+}
+
+let remoteRules = sanitizeRules(null);
+try { remoteRules = sanitizeRules((JSON.parse(localStorage.getItem(REMOTE_RULES_STORE) || 'null') || {}).rules); } catch (e) {}
+
+// 오래됐을 때만 새로 받아서, 바뀌었으면 미리보기를 다시 그린다
+async function refreshRemoteRules() {
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(REMOTE_RULES_STORE) || 'null'); } catch (e) {}
+  if (cached && Date.now() - cached.at < REMOTE_RULES_TTL) return;
+  try {
+    const r = await fetch(REMOTE_RULES_URL, { cache: 'no-cache', credentials: 'omit' });
+    if (!r.ok) return;
+    const json = await r.json();
+    try { localStorage.setItem(REMOTE_RULES_STORE, JSON.stringify({ at: Date.now(), rules: json })); } catch (e) {}
+    const next = sanitizeRules(json);
+    if (JSON.stringify(next) !== JSON.stringify(remoteRules)) {
+      remoteRules = next;
+      dlog('원격 규칙 갱신:', remoteRules);
+      debouncedUpdate();
+    }
+  } catch (e) { dlog('원격 규칙 받기 실패:', e); }
+}
+
+// addClass 규칙 적용 (예: 뷰어 스크립트가 붙이던 로드 완료 클래스)
+function applyRemoteAddClass(root) {
+  remoteRules.addClass.forEach(({ selector, add }) => {
+    try { root.querySelectorAll(selector).forEach(el => el.classList.add(...add)); } catch (e) {}
+  });
+}
+
 function stripEditorUI(root) {
   const sel = [
     'button', 'script', 'style', 'noscript',
@@ -686,6 +745,9 @@ function stripEditorUI(root) {
     '.se-tooltip', '.se-help', '.se-guide', '.se-guideline',
   ].join(',');
   root.querySelectorAll(sel).forEach(el => { try { el.remove(); } catch (e) {} });
+  remoteRules.stripSelectors.forEach(rs => {
+    try { root.querySelectorAll(rs).forEach(el => el.remove()); } catch (e) {}
+  });
   stripEditorOnlyTexts(root);
 }
 
@@ -695,9 +757,10 @@ function stripEditorUI(root) {
 // (실제로 AI 표시를 켠 사진의 뷰어 배지 .se-ai-tooltip-container 는 문구가 달라 영향 없음)
 const EDITOR_ONLY_TEXTS = ['AI 활용 설정'];
 function stripEditorOnlyTexts(root) {
+  if (!EDITOR_ONLY_TEXTS.length && !remoteRules.stripTexts.length) return;
   const norm = s => (s || '').replace(/\s+/g, ' ').trim();
   const isHit = el =>
-    EDITOR_ONLY_TEXTS.includes(norm(el.textContent)) &&
+    (EDITOR_ONLY_TEXTS.includes(norm(el.textContent)) || remoteRules.stripTexts.includes(norm(el.textContent))) &&
     !el.querySelector('img, video, iframe') &&
     !el.matches('.se-component, .se-section, .se-module, .se-main-container');
   const hits = [...root.querySelectorAll('*')].filter(isHit);
@@ -958,7 +1021,8 @@ function buildPreviewSrcdoc(sourceDoc, opts) {
   mobilizeTables(clone);
 
   // 글쓰기 중 에디터 구조 → 발행 글 구조 (코드·파일·자료·일정·맞춤 컴포넌트)
-  const extraCss = opts.isEditor ? viewerizeEditorComponents(clone, src) : '';
+  const extraCss = (opts.isEditor ? viewerizeEditorComponents(clone, src) : '') + remoteRules.extraCss;
+  applyRemoteAddClass(clone);
 
   // 에디터 전용 편집 UI 제거 (작성자 주입 전에 실행)
   stripEditorUI(clone);
@@ -1584,6 +1648,9 @@ function init() {
 
   // Step 2: 그래도 없으면 외부 페이지 fetch
   const blogId = extractBlogId();
+
+  // 원격 규칙 (rules.json) — 저장본으로 이미 적용 중, 오래됐으면 새로 받음
+  refreshRemoteRules();
 
   // 광고 설정 자동 감지 (선택이 '자동'일 때 사용)
   fetchAdSetting(blogId).then(mode => {
