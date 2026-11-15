@@ -1415,13 +1415,28 @@ function restoreSlidePositions(doc, positions) {
 }
 
 // iframe 높이를 내부 콘텐츠에 맞춰 늘려 부모(#mobile-preview-body)가 통째로 스크롤되게 함
+// ⚠️ documentElement.scrollHeight 는 iframe 자신의 높이보다 작아지지 않는다 (최소 = 뷰포트 높이).
+//    그걸로 맞추면 내용이 줄어도(글 삭제·늦게 적용된 스타일 등) iframe 이 줄지 않아 아래에 흰 공백이 남음.
+//    → 본문 래퍼(#viewTypeSelector)의 실제 아래 끝으로 높이를 잰다.
+function measurePreviewHeight(d) {
+  const wrap = d.getElementById('viewTypeSelector') || d.body;
+  if (!wrap) return 0;
+  const bottom = wrap.getBoundingClientRect().bottom + (d.defaultView ? d.defaultView.scrollY : 0);
+  const mb = parseFloat((d.defaultView && d.defaultView.getComputedStyle(wrap).marginBottom) || 0) || 0;
+  return Math.ceil(bottom + mb);
+}
+
 function sizePreviewFrame(frame, slidePositions) {
   const resize = () => {
     try {
       const d = frame.contentDocument;
-      if (d && d.documentElement) frame.style.height = d.documentElement.scrollHeight + 'px';
+      if (!d || !d.documentElement) return;
+      const h = measurePreviewHeight(d);
+      if (h > 0) frame.style.height = h + 'px';
     } catch (e) {}
   };
+  // 이전 문서에 붙인 크기 감시는 정리 (srcdoc 를 바꿀 때마다 새 문서)
+  if (frame._pvResizeObserver) { try { frame._pvResizeObserver.disconnect(); } catch (e) {} frame._pvResizeObserver = null; }
   frame.onload = () => {
     // onload = 이미지까지 로드된 뒤 → 컴포넌트 높이가 확정된 상태에서 광고 위치 계산
     try {
@@ -1429,7 +1444,16 @@ function sizePreviewFrame(frame, slidePositions) {
       restoreSlidePositions(frame.contentDocument, slidePositions);
     } catch (e) {}
     try { insertAdSlots(frame.contentDocument, currentAdMode()); } catch (e) {}
-    resize(); setTimeout(resize, 300); setTimeout(resize, 1200);
+    resize();
+    // 사진이 늦게 로드되거나 슬라이드 진행바가 생기는 등 본문 높이가 바뀔 때마다 다시 맞춤
+    try {
+      const d = frame.contentDocument;
+      const wrap = d.getElementById('viewTypeSelector') || d.body;
+      if (wrap && typeof ResizeObserver === 'function') {
+        frame._pvResizeObserver = new ResizeObserver(resize);
+        frame._pvResizeObserver.observe(wrap);
+      } else { setTimeout(resize, 300); setTimeout(resize, 1200); }
+    } catch (e) { setTimeout(resize, 300); setTimeout(resize, 1200); }
   };
 }
 
