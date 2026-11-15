@@ -1,3 +1,8 @@
+// 개발용 로그: 콘솔에서 localStorage.mobilePreviewDebug = '1' 로 켜고 새로고침
+let DEBUG = false;
+try { DEBUG = localStorage.getItem('mobilePreviewDebug') === '1'; } catch (e) {}
+function dlog(...args) { if (DEBUG) console.log('[미리보기]', ...args); }
+
 // width·height = 기기 화면 전체의 CSS 픽셀 크기 (상태바·하단바 포함)
 // statusBar   = 시간·배터리 줄 높이. 미리보기는 이 줄을 그리지 않으므로 화면 높이에서 뺀다
 //               (본문이 보이는 양은 실제 폰과 같게 유지). 54 = iPhone 16 실측, 나머지는 근사값.
@@ -295,7 +300,7 @@ async function fetchBlogUserInfo(blogId) {
       const mainFrame = doc.querySelector('frame[name="mainFrame"]') || doc.querySelector('frame');
       if (mainFrame) {
         const frameUrl = new URL(mainFrame.getAttribute('src'), 'https://blog.naver.com').href;
-        console.log('[미리보기] frameset 감지 → mainFrame fetch:', frameUrl);
+        dlog('frameset 감지 → mainFrame fetch:', frameUrl);
         return fetchAndParse(frameUrl);
       }
     }
@@ -310,20 +315,20 @@ async function fetchBlogUserInfo(blogId) {
 
   for (const url of urls) {
     try {
-      console.log('[미리보기] fetch 시도:', url);
+      dlog('fetch 시도:', url);
       const doc = await fetchAndParse(url);
       if (!doc) continue;
       const result = extractFromDoc(doc);
       if (result.nickname || result.profileImg || result.blogName) {
-        console.log('[미리보기] fetch 결과 →', result);
+        dlog('fetch 결과 →', result);
         return result;
       }
     } catch (e) {
-      console.log('[미리보기] fetch 실패:', url, e);
+      dlog('fetch 실패:', url, e);
     }
   }
 
-  console.log('[미리보기] 모든 fetch 실패');
+  dlog('모든 fetch 실패');
   return {};
 }
 
@@ -536,13 +541,44 @@ function buildOgLink(url, title, desc, thumb, domain) {
 // ════════════════════════════════════════════════════════════
 // 네이버 실제 모바일 뷰어 CSS. 버전이 박혀 있어 시간이 지나면 낡거나 사라질 수 있으므로,
 // 실행 시 에디터 페이지에서 현재 버전을 찾아 갱신하고(resolveViewerCSS) 실패 시 이 목록으로 폴백.
+// 미리보기 iframe 에 넣는 네이버 모바일 뷰어 CSS 4종.
+// 아래 값은 최후의 기본값일 뿐이고, 실제로는 resolveViewerCSS 가 최신 주소로 바꿔 끼운다.
+//   lego_w·lego_view·se_viewer_blog_mobile = 모바일 글 페이지(m.blog)에만 있음 → 내 글 모바일 페이지에서 읽음
+//   se.viewer.css                         = 에디터와 같은 SE 버전 → 글쓰기 페이지에서 버전을 읽어 재구성
+// (lego_w 는 파일명에 해시가 붙어 수시로 바뀜: 2026-11-15 기준 261743111 → 142457331)
 const NAVER_VIEWER_CSS_FALLBACK = [
-  'https://ssl.pstatic.net/t.static.blog/nmobile/versioning/lego_w-261743111_https.css',
+  'https://ssl.pstatic.net/t.static.blog/nmobile/versioning/lego_w-142457331_https.css',
   'https://ssl.pstatic.net/t.static.blog/nmobile/versioning/lego_view-63655323_https.css',
   'https://ssl.pstatic.net/static/blog/se/css/se_viewer_blog_mobile_v1.43.1.css',
-  'https://editor-static.pstatic.net/v/basic/1.78.0/css/se.viewer.css',
+  'https://editor-static.pstatic.net/v/basic/1.78.1/css/se.viewer.css',
 ];
+const VIEWER_CSS_KEYS = ['lego_w', 'lego_view', 'se_viewer_blog_mobile', 'se.viewer.css'];
 let viewerCssUrls = NAVER_VIEWER_CSS_FALLBACK.slice();
+
+// 모바일 글 페이지에서 찾은 CSS 주소 { key: url }
+//   cached = 지난번에 찾아 저장해 둔 값 (이번 세션에서 아직 못 받았을 때 기본값보다 우선)
+//   fresh  = 이번 세션에 방금 받은 값 (가장 우선)
+const MOBILE_CSS_STORE = 'mobilePreviewViewerCss';
+let mobileCssCached = {};
+try { mobileCssCached = JSON.parse(localStorage.getItem(MOBILE_CSS_STORE) || '{}') || {}; } catch (e) {}
+let mobileCssFresh = null;
+
+// 모바일 글 페이지 HTML 에서 뷰어 CSS 주소를 뽑아 반영하고 저장
+function applyMobileCssFromHtml(html) {
+  const hrefs = [...html.matchAll(/<link[^>]+rel=["']?stylesheet[^>]*>/gi)]
+    .map(m => (m[0].match(/href=["']([^"']+)["']/) || [])[1])
+    .filter(Boolean);
+  const found = {};
+  VIEWER_CSS_KEYS.forEach(k => {
+    const h = hrefs.find(x => x.includes(k) && /^https:\/\//.test(x));
+    if (h) found[k] = h;
+  });
+  if (!Object.keys(found).length) return false;
+  mobileCssFresh = found;
+  try { localStorage.setItem(MOBILE_CSS_STORE, JSON.stringify(found)); } catch (e) {}
+  resolveViewerCSS();
+  return true;
+}
 
 // 현재 페이지(+에디터 iframe)가 로드한 stylesheet URL 수집
 function collectPageCssHrefs() {
@@ -557,26 +593,25 @@ function collectPageCssHrefs() {
   return out;
 }
 
-// 고정 버전 대신 현재 페이지에서 최신 CSS URL을 찾아 갱신 (없으면 fallback 유지).
-// 특히 본문 스타일 se.viewer.css 는 로드된 SE 버전(.../v/basic/<버전>/)에서 재구성해 최신화.
+// 우선순위 (뒤가 이김): 기본값 < 지난번 저장값 < 현재 페이지 링크 < 에디터 SE 버전으로 재구성 < 이번에 받은 모바일 글
 function resolveViewerCSS() {
-  const hrefs = collectPageCssHrefs();
   const next = NAVER_VIEWER_CSS_FALLBACK.slice();
-  ['lego_w', 'lego_view', 'se_viewer_blog_mobile', 'se.viewer.css'].forEach(pat => {
-    const found = hrefs.find(h => h.includes(pat));
-    if (found) {
-      const i = next.findIndex(u => u.includes(pat));
-      if (i >= 0) next[i] = found;
-    }
-  });
-  const verHref = hrefs.find(h => /editor-static\.pstatic\.net\/v\/basic\/[\d.]+\//.test(h));
-  const vm = verHref && verHref.match(/\/v\/basic\/([\d.]+)\//);
-  if (vm) {
-    const i = next.findIndex(u => u.includes('se.viewer.css'));
-    if (i >= 0) next[i] = `https://editor-static.pstatic.net/v/basic/${vm[1]}/css/se.viewer.css`;
-  }
+  const put = (key, url) => {
+    const i = VIEWER_CSS_KEYS.indexOf(key);
+    if (i >= 0 && url) next[i] = url;
+  };
+  VIEWER_CSS_KEYS.forEach(k => put(k, mobileCssCached[k]));
+
+  const hrefs = collectPageCssHrefs();
+  VIEWER_CSS_KEYS.forEach(k => put(k, hrefs.find(h => h.includes(k))));
+  const verHref = hrefs.find(h => /editor-static\.pstatic\.net\/[ve]\/basic[\w.]*\/[\d.]+\//.test(h));
+  const vm = verHref && verHref.match(/\/basic[\w.]*\/([\d.]+)\//);
+  if (vm) put('se.viewer.css', `https://editor-static.pstatic.net/v/basic/${vm[1]}/css/se.viewer.css`);
+
+  if (mobileCssFresh) VIEWER_CSS_KEYS.forEach(k => put(k, mobileCssFresh[k]));
+
+  if (next.join() !== viewerCssUrls.join()) dlog('뷰어 CSS 확정:', next);
   viewerCssUrls = next;
-  try { console.log('[미리보기] 뷰어 CSS 확정:', viewerCssUrls); } catch (e) {}
 }
 
 // 동영상(se-video)·외부 임베드(se-oembed): 실제 뷰어에선 네이버 플레이어 스크립트가
@@ -1030,16 +1065,19 @@ async function fetchAdSetting(blogId) {
     }
     if (!logNo) return null;
     const html = await (await fetch(`https://m.blog.naver.com/${encodeURIComponent(blogId)}/${logNo}`, { credentials: 'include' })).text();
+    // 같은 페이지에서 최신 모바일 뷰어 CSS 주소도 읽어 둔다 (바뀌었으면 미리보기 다시 그림)
+    const before = viewerCssUrls.join();
+    if (applyMobileCssFromHtml(html) && viewerCssUrls.join() !== before) debouncedUpdate();
     const m = html.match(/advertise\\?"\s*:\s*\{([^}]*)\}/);
     if (!m) return null;
     const flag = k => new RegExp(k + '\\\\?"\\s*:\\s*true').test(m[1]);
     const loc = (m[1].match(/adContentLocation\\?"\s*:\s*(-?\d+)/) || [])[1];
     const mode = !(flag('adPostYn') && flag('adContentYn')) ? 'none'
       : ({ 1: 'middle', 2: 'bottom', 0: 'both' }[loc] || 'none');
-    console.log('[미리보기] 광고 설정 감지:', m[1], '→', mode);
+    dlog('광고 설정 감지:', m[1], '→', mode);
     return mode;
   } catch (e) {
-    console.log('[미리보기] 광고 설정 감지 실패:', e);
+    dlog('광고 설정 감지 실패:', e);
     return null;
   }
 }
@@ -1326,7 +1364,7 @@ function updatePreview() {
   let srcdoc = null;
   try {
     srcdoc = buildPreviewSrcdoc(getIframeDoc() || document, { isEditor: true, author });
-  } catch (e) { console.log('[미리보기] 렌더 오류:', e); }
+  } catch (e) { console.warn('[미리보기] 렌더 오류:', e); }
 
   sizePreviewFrame(frame, saveSlidePositions(frame));
   if (srcdoc) {
@@ -1477,7 +1515,7 @@ function isEditorPage() {
   const href = window.location.href.toLowerCase();
   const byUrl = /[a-z]*(?:write|update)[a-z]*\.naver|\/post(?:write|update)(?:[/?#]|$)|[?&]redirect=(?:write|update)\b/.test(href);
   const byDom = !byUrl && hasEditorDom();
-  if (byUrl || byDom) console.log('[미리보기] 에디터 감지:', byUrl ? '주소' : 'DOM', href);
+  if (byUrl || byDom) dlog('에디터 감지:', byUrl ? '주소' : 'DOM', href);
   return byUrl || byDom;
 }
 
@@ -1540,7 +1578,7 @@ function init() {
   // Step 1: 현재 페이지 script 태그 즉시 스캔 (네트워크 요청 없음)
   const nickFromPage = getNicknameFromCurrentPage();
   if (nickFromPage) {
-    console.log('[미리보기] 현재 페이지에서 닉네임 발견:', nickFromPage);
+    dlog('현재 페이지에서 닉네임 발견:', nickFromPage);
     applyUserInfo(nickFromPage, null);
   }
 
