@@ -480,26 +480,6 @@
   transition: left 0.3s ease;
 }
 
-/* ── 좋아요·댓글·공유 바 ── */
-/* 공감바: 718–769px (상단선 #ebebeb, 높이 51)
-   하트 x22 · 분홍하트+숫자 x54 · 댓글 x109 · 보내기 x155 */
-.post-action-bar {
-  display: flex;
-  align-items: center;
-  height: 48px;
-  padding: 2px 0 0 22px;       /* 아이콘 중심 y≈745 */
-  border-top: 1px solid #ebebeb;
-  flex-shrink: 0;
-}
-.action-like {
-  display: flex; align-items: center; gap: 4px;
-  margin: 0 0 0 6px;
-  font-family: -apple-system, sans-serif;
-  font-size: 15px; color: #333;
-}
-.post-action-bar svg { flex-shrink: 0; overflow: visible; }   /* 좁은 폭에서 찌그러지거나 선 끝이 잘리지 않게 */
-.action-comment { margin-left: 20.5px; }
-.action-send    { margin-left: 23.5px; }
 
 /* 하단 탭바: 769–852px (상단선 #d9d9d9 포함 83px)
    아이콘 중심 y≈794 → 위쪽 48px 에 가운데 정렬 + 아래 34px 홈 인디케이터 여백

@@ -28,13 +28,13 @@ function getSavedDevice() {
 // 브라우저 창이 기기보다 낮으면 레이아웃(줄바꿈 등)은 그대로 두고 통째로 축소해서 보여준다.
 // 폰 테두리 두께 (style.css #pv-device padding 과 같아야 함)
 const PV_BEZEL = 5;
-// 실제 네이버 앱엔 상태바 아래 인앱 주소줄(blog.naver.com ✕, 25px)이 있어 본문이 그만큼 덜 보인다.
-// 미리보기에선 주소줄을 그리지 않으므로 화면 높이에서 빼서 본문이 보이는 양을 실제와 같게 맞춘다.
-const PV_HIDDEN_URL_BAR = 25;
+// 실제 네이버 앱에 있지만 미리보기에선 그리지 않는 바들. 화면 높이에서 빼서 본문이 보이는 양을 실제와 같게 맞춘다.
+//   인앱 주소줄(blog.naver.com ✕) 25px + 하단 공감·댓글·공유 바 51px
+const PV_HIDDEN_BARS = 25 + 51;
 
 function applyDevice(panel, device) {
   panel.style.width = (device.width + PV_BEZEL * 2) + 'px';
-  panel.querySelector('#phone-screen').style.height = (device.height - device.statusBar - PV_HIDDEN_URL_BAR) + 'px';
+  panel.querySelector('#phone-screen').style.height = (device.height - device.statusBar - PV_HIDDEN_BARS) + 'px';
   if (panel.style.display === 'none') return;   // 닫힌 상태에선 크기 측정 불가 → 열 때 다시 호출
   const avail = window.innerHeight - panel.offsetTop - 20;
   const scale = Math.min(1, avail / panel.offsetHeight);   // offsetHeight 는 transform 영향 없음
@@ -123,24 +123,6 @@ function createPanel() {
         <iframe id="preview-frame" scrolling="no" title="미리보기" sandbox="allow-same-origin" allow="autoplay"></iframe>
       </div>
 
-      <!-- 공감·댓글·공유 (실측 51px) -->
-      <div class="post-action-bar">
-        <!-- 하트: 양쪽 둥근 윗부분이 viewBox(0~22) 안에 들어오게 그린 경로 (예전 경로는 호가 y<0 으로 넘쳐 위가 잘림) -->
-        <svg width="26" height="22" viewBox="0 0 26 22" fill="none" stroke="#222" stroke-width="1.7" stroke-linejoin="round">
-          <path d="M13 20.6C13 20.6 1.5 13.8 1.5 7.3C1.5 4 4 1.5 7.2 1.5C9.6 1.5 11.9 2.9 13 5C14.1 2.9 16.4 1.5 18.8 1.5C22 1.5 24.5 4 24.5 7.3C24.5 13.8 13 20.6 13 20.6Z"/>
-        </svg>
-        <span class="action-like">
-          <svg width="15" height="13" viewBox="0 0 26 22" fill="#f25a7c"><path d="M13 20.6C13 20.6 1.5 13.8 1.5 7.3C1.5 4 4 1.5 7.2 1.5C9.6 1.5 11.9 2.9 13 5C14.1 2.9 16.4 1.5 18.8 1.5C22 1.5 24.5 4 24.5 7.3C24.5 13.8 13 20.6 13 20.6Z"/></svg>
-          <span>10</span>
-        </span>
-        <svg class="action-comment" width="23" height="23" viewBox="0 0 23 23" fill="none" stroke="#222" stroke-width="1.7">
-          <path d="M11.5 1.5a10 10 0 0 1 0 20 10 10 0 0 1-4.6-1.1L1.8 21.5l1.2-4.9A10 10 0 0 1 11.5 1.5z" stroke-linejoin="round"/>
-          <circle cx="7" cy="11.5" r="1.1" fill="#222" stroke="none"/><circle cx="11.5" cy="11.5" r="1.1" fill="#222" stroke="none"/><circle cx="16" cy="11.5" r="1.1" fill="#222" stroke="none"/>
-        </svg>
-        <svg class="action-send" width="23" height="22" viewBox="0 0 23 22" fill="none" stroke="#222" stroke-width="1.7" stroke-linejoin="round">
-          <path d="M22 1L1 8.5l9 3.5 3.5 9z M22 1L10 12"/>
-        </svg>
-      </div>
 
       <!-- 네이버 앱 하단 탭바 (실측 82px: 아이콘 20px + 홈 인디케이터 여백) -->
       <div class="app-nav-bar">
